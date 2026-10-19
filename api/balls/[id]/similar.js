@@ -1,5 +1,5 @@
 // GET /api/balls/{id}/similar[?weight=lbs][&limit=n] — similar reaction, newest first.
-import { withCors } from '../../../middleware.js';
+import { withCors } from '../../../lib/cors.js';
 import { findSimilarBalls } from '../../../lib/balls.js';
 import { parseInteger, parseNumber, parseRequired } from '../../../lib/params.js';
 import { sendJson, withErrorHandling } from '../../../lib/respond.js';

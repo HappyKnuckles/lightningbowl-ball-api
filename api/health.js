@@ -1,5 +1,5 @@
 // GET /api/health — catalog size and the latest sync run.
-import { withCors } from '../middleware.js';
+import { withCors } from '../lib/cors.js';
 import { query } from '../lib/db.js';
 import { withErrorHandling } from '../lib/respond.js';
 
