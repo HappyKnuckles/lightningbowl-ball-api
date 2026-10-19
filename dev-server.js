@@ -5,6 +5,7 @@ import http from 'node:http';
 
 import ball from './api/balls/[id]/index.js';
 import similar from './api/balls/[id]/similar.js';
+import exportBalls from './api/balls/export.js';
 import balls from './api/balls/index.js';
 import brands from './api/brands.js';
 import cores from './api/cores.js';
@@ -18,6 +19,7 @@ const PORT = Number(process.env.PORT || 3003);
 
 const routes = [
   [/^\/api\/balls$/, balls],
+  [/^\/api\/balls\/export$/, exportBalls],
   [/^\/api\/balls\/(?<id>[^/]+)$/, ball],
   [/^\/api\/balls\/(?<id>[^/]+)\/similar$/, similar],
   [/^\/api\/brands$/, brands],
