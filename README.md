@@ -79,6 +79,10 @@ The default order is newest release first.
 /api/balls?addedAfter=2026-10-01&sort=first_seen_at,desc   # new in the catalog
 ```
 
+### `GET /api/balls/export[?weight=15]`
+
+The whole active catalog (optionally one weight) as a plain array, newest first. Not paged. Meant for clients that keep an offline copy. CDN-cached for an hour.
+
 ### `GET /api/balls/{id}[?weight=15]`
 
 All weight variants of a ball, heaviest first. This includes balls removed upstream (with `removed_at` set), so arsenal entries keep resolving. Returns `404` if the ball is unknown.

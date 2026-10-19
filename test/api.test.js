@@ -2,6 +2,7 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import ballHandler from '../api/balls/[id]/index.js';
 import similarHandler from '../api/balls/[id]/similar.js';
+import exportHandler from '../api/balls/export.js';
 import ballsHandler from '../api/balls/index.js';
 import brandsHandler from '../api/brands.js';
 import coresHandler from '../api/cores.js';
@@ -145,4 +146,15 @@ test('cron endpoint requires the secret', async () => {
   process.env.CRON_SECRET = 'test-secret';
   assert.equal((await call(cronHandler)).statusCode, 401);
   assert.equal((await call(cronHandler, {}, { headers: { authorization: 'Bearer wrong' } })).statusCode, 401);
+});
+
+test('GET /api/balls/export returns the whole catalog newest first', async () => {
+  const all = await call(exportHandler);
+  assert.equal(all.body.length, 8);
+  const fifteen = await call(exportHandler, { weight: '15' });
+  assert.deepEqual(
+    fifteen.body.map((b) => b.ball_id),
+    ['7', '6', '2', '3', '4', '1', '8'],
+  );
+  assert.equal((await call(exportHandler, { weight: 'heavy' })).statusCode, 400);
 });
