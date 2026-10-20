@@ -37,12 +37,38 @@ test('lists balls newest first in a Spring-style page with cache headers', async
   assert.equal(res.headers.vary, 'Origin');
 });
 
-test('returns the upstream object shape plus first_seen_at', async () => {
+test('returns typed balls: numeric specs, ISO dates, no upstream extras', async () => {
   const res = await call(ballsHandler, { id: '3' });
   const ball = res.body.content[0];
-  assert.equal(ball.core_rg, '2.50');
+  assert.equal(ball.core_rg, 2.5);
+  assert.equal(typeof ball.core_diff, 'number');
+  assert.equal(ball.core_weight, '15');
   assert.equal(ball.ball_name, 'Black Widow 3.0');
+  assert.match(ball.release_date, /^\d{4}-\d{2}-\d{2}$/);
   assert.ok(ball.first_seen_at);
+  assert.equal('raw' in ball, false);
+
+  const unknownSpec = (await call(ballsHandler, { id: '4' })).body.content[0];
+  assert.equal(unknownSpec.core_rg, null); // upstream 'n/a'
+
+  assert.deepEqual(ids(await call(ballsHandler, { releaseDate: '2024-01-01' })), ['6-15']);
+  assert.equal((await call(ballsHandler, { releaseDate: 'Jan 2024' })).statusCode, 400);
+  assert.deepEqual(Object.keys((await call(brandsHandler)).body[0]).sort(), ['brand_name', 'id', 'logo']);
+  assert.deepEqual(Object.keys((await call(coresHandler)).body[0]).sort(), ['brand', 'core_name', 'id']);
+});
+
+test('favorite lists favorites first without filtering', async () => {
+  const all = ids(await call(ballsHandler, { weight: '15' }));
+  const res = await call(ballsHandler, { weight: '15', favorite: ['4-15', '8'] });
+  assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+  assert.equal(res.body.page.totalElements, all.length);
+  // Favorites keep the regular order among themselves, as does the rest.
+  assert.deepEqual(ids(res), ['4-15', '8-15', ...all.filter((id) => id !== '4-15' && id !== '8-15')]);
+  // A key for another weight doesn't match.
+  assert.deepEqual(ids(await call(ballsHandler, { weight: '15', favorite: '4-14' })), all);
+  // Favorites first also applies to search results and explicit sorts.
+  assert.deepEqual(ids(await call(ballsHandler, { search: 'phaze', favorite: '2', weight: '15', size: '1' })), ['2-15']);
+  assert.deepEqual(ids(await call(ballsHandler, { weight: '15', sort: 'ball_name', favorite: '7' }))[0], '7-15');
 });
 
 test('filters case-insensitively and combines filters', async () => {
