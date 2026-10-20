@@ -4,6 +4,20 @@ import { query } from '../lib/db.js';
 import { withErrorHandling } from '../lib/respond.js';
 
 async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    await query('SELECT 1 FROM balls LIMIT 1');
+  } catch (error) {
+    if (error.code === '42P01') {
+      // undefined_table: migrations haven't run yet
+      return res.status(503).json({
+        status: 'not_initialized',
+        hint: 'Run the sync once (Vercel → Settings → Cron Jobs → Run); it creates the tables and imports the catalog.',
+      });
+    }
+    throw error;
+  }
+
   const [{ rows: counts }, { rows: runs }] = await Promise.all([
     query(`SELECT
       (SELECT count(*)::int FROM balls WHERE removed_at IS NULL) AS balls,
@@ -13,8 +27,7 @@ async function handler(req, res) {
     query(`SELECT id, started_at, finished_at, status, trigger, stats, errors FROM sync_runs ORDER BY started_at DESC LIMIT 1`),
   ]);
 
-  res.setHeader('Cache-Control', 'no-store');
-  res.status(200).json({ status: 'ok', counts: counts[0], lastSync: runs[0] ?? null });
+  res.status(200).json({ status: runs[0] ? 'ok' : 'empty', counts: counts[0], lastSync: runs[0] ?? null });
 }
 
 export default withCors(withErrorHandling(handler));

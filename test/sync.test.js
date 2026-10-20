@@ -1,6 +1,7 @@
 import { after, before, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { query } from '../lib/db.js';
+import { migrate } from '../lib/migrate.js';
 import { runSync } from '../lib/sync.js';
 import { BALLS_15, fakeUpstream, upstreamBall } from './helpers/fixtures.js';
 import { resetDatabase, startDatabase } from './helpers/db.js';
@@ -99,4 +100,44 @@ test('a run is skipped while another one is running; stale runs are closed out',
     rows.map((r) => r.status),
     ['failed', 'success'],
   );
+});
+
+test('uses the v2 catalog when bowwwl ignores the page parameter, legacy for weights v2 lacks', async () => {
+  const upstream = fakeUpstream({ v2: BALLS_15, 15: new Error('legacy endpoint broken') });
+  const run = await runSync({ weights: [14, 15], fetchFn: upstream.fetchFn, retryBackoffMs: 1, log: () => {} });
+
+  assert.equal(run.status, 'success');
+  assert.equal(run.stats.balls_15.source, 'v2');
+  assert.equal(run.stats.balls_15.inserted, 4);
+  assert.equal(run.stats.balls_14.source, 'legacy');
+  // page 0 had everything, page 1 added nothing: exactly two v2 requests
+  assert.equal(upstream.calls.filter((u) => u.includes('/balls/v2')).length, 2);
+});
+
+test('follows real v2 paging until a page adds nothing', async () => {
+  const pages = [BALLS_15.slice(0, 2), BALLS_15.slice(2, 3), BALLS_15.slice(3), [], []];
+  const upstream = fakeUpstream({ v2: pages });
+  const run = await runSync({ weights: [15], fetchFn: upstream.fetchFn, retryBackoffMs: 1, log: () => {} });
+
+  assert.equal(run.stats.balls_15.source, 'v2');
+  assert.equal(run.stats.balls_15.fetched, 4);
+});
+
+test('falls back to the legacy endpoint when v2 fails', async () => {
+  const run = await sync({ v2: new Error('v2 down') });
+  assert.equal(run.status, 'success');
+  assert.equal(run.stats.balls_15.source, 'legacy');
+  assert.match(run.stats.warnings.join(), /v2 catalog unavailable/);
+});
+
+test('a sync on an empty database creates the schema itself, even when started twice at once', async () => {
+  await query('DROP SCHEMA public CASCADE');
+  await query('CREATE SCHEMA public');
+
+  const [a, b] = await Promise.all([migrate({ log: () => {} }), migrate({ log: () => {} })]);
+  assert.ok(a.length + b.length >= 2, 'all migrations ran');
+
+  const run = await sync();
+  assert.equal(run.status, 'success');
+  assert.equal(await count('SELECT count(*)::int AS n FROM balls'), 5);
 });

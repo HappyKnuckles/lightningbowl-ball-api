@@ -8,23 +8,18 @@ Ball catalog API for [Lightning Bowl](https://github.com/HappyKnuckles/lightning
 
 ## Setup
 
-1. **Create a Neon project.** Copy the **pooled** connection string (host contains `-pooler`).
-2. **Create `.env.local`** from `.env.example` and fill in `DATABASE_URL` and `CRON_SECRET` (any long random string, e.g. `openssl rand -hex 32`).
-3. **Install and load the catalog:**
-   ```bash
-   npm install
-   npm run migrate   # create tables and indexes
-   npm run sync      # first import from bowwwl.com
-   npm run dev       # http://localhost:3003
-   ```
-4. **Deploy to Vercel:** import the repo and set `DATABASE_URL`, `CRON_SECRET` and `ALLOWED_ORIGINS` as environment variables. The cron job in `vercel.json` registers itself on the production deployment. Vercel sends `Authorization: Bearer $CRON_SECRET`, which `/api/cron/sync` checks.
-5. **Migrations:** run `npm run migrate` against Neon whenever a new file appears in `migrations/`. Migrations are forward-only and each one is applied once.
+1. **Deploy to Vercel** and connect a Neon database (Storage → Neon). The integration sets `DATABASE_URL` / `POSTGRES_URL`.
+2. **Add `CRON_SECRET`** (any long random string, e.g. `openssl rand -hex 32`) and **`ALLOWED_ORIGINS`** (the app's production origin), then redeploy so the function picks them up.
+3. **Run the first sync:** Vercel → project → **Settings → Cron Jobs** → **Run** next to `/api/cron/sync`. It creates the tables and imports the catalog; takes a minute or two. After that it runs nightly on its own.
+4. **Check** `GET /api/health`: `counts.balls` should be in the thousands and `lastSync.status` `success` (or `partial`, see below).
 
-`npm test` runs the suite against a throwaway embedded Postgres, so it needs no database setup.
+Local development: copy `.env.example` to `.env.local`, then `npm install`, `npm run sync` (also migrates) and `npm run dev` (http://localhost:3003). `npm test` runs against a throwaway embedded Postgres and needs no database.
 
 ## How the sync works
 
-`lib/sync.js` fetches brands, cores, coverstocks and the balls for each weight (`SYNC_WEIGHTS`, default 12–16 lb).
+`lib/sync.js` first applies any pending migrations, then fetches brands, cores, coverstocks and the balls for each weight (`SYNC_WEIGHTS`, default 12–16 lb).
+
+- **Ball source:** the paged v2 endpoint (`/restapi/balls/v2`), because bowwwl's full-catalog endpoint (`/restapi/balls?_format=json`) is broken. v2 is read once per run and split by weight. A weight v2 doesn't contain falls back to the legacy per-weight endpoint; if that fails too, that weight is reported as an error, its existing rows are left alone and the run ends as `partial`. `stats.balls_<weight>.source` shows which source was used.
 
 - **New balls** are inserted and keep their `first_seen_at`, which the API exposes and which `addedAfter` / `sort=first_seen_at` use.
 - **Changed balls** are updated. Unchanged rows aren't written at all.
