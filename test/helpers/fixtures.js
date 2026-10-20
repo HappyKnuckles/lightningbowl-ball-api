@@ -75,9 +75,18 @@ export function fakeUpstream(data = {}) {
   const calls = [];
   const fetchFn = async (url) => {
     calls.push(url);
-    const weight = new URL(url).searchParams.get('weight');
-    const key = weight ?? url.split('/').pop();
-    const body = routes[key] ?? [];
+    const { pathname, searchParams } = new URL(url);
+    let body;
+    if (pathname.endsWith('/balls/v2')) {
+      // `v2` is an array of pages (real paging) or one list returned for every
+      // page (bowwwl ignoring `page`); absent means v2 has nothing.
+      const v2 = routes.v2 ?? [];
+      const page = Number(searchParams.get('page'));
+      body = v2 instanceof Error ? v2 : Array.isArray(v2[0]) ? (v2[page] ?? []) : v2;
+    } else {
+      const key = searchParams.get('weight') ?? pathname.split('/').pop();
+      body = routes[key] ?? [];
+    }
     if (body instanceof Error) throw body;
     return { ok: true, status: 200, json: async () => body };
   };
