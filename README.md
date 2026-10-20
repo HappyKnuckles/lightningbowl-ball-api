@@ -73,7 +73,7 @@ Paged response:
 | --- | --- |
 | `search` (alias `q`) | Fuzzy search over ball, brand, core and coverstock name and factory finish. Tolerates typos; separate several terms with commas. Without `sort`, results are ordered by relevance. |
 | `weight` | Ball weight in lbs. |
-| `brand`, `core`, `coverstock`, `coverstockType`, `factoryFinish` | Exact match, case-insensitive, repeatable. |
+| `name`, `brand`, `core`, `coverstock`, `coverstockType`, `factoryFinish` | Exact match, case-insensitive, repeatable. `name` resolves ball names stored elsewhere (e.g. in games). |
 | `market` | `US` or `Overseas`. |
 | `coreType` | `Symmetric` or `Asymmetric`. |
 | `available` | `true` = available only, `false` = discontinued only. |

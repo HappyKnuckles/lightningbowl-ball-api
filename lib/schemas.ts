@@ -92,6 +92,7 @@ export const BallQuery = z
       'Fuzzy search over ball, brand, core and coverstock name and factory finish. Tolerates typos; separate several terms with commas. Without `sort`, results are ordered by relevance. Alias: `q`.',
     ),
     weight,
+    name: list('Ball name (exact, case-insensitive), e.g. to resolve names stored in games.'),
     brand: list('Brand name (exact, case-insensitive).'),
     core: list('Core name (exact, case-insensitive).'),
     coverstock: list('Coverstock name (exact, case-insensitive).'),

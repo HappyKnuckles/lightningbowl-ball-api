@@ -62,6 +62,7 @@ export function buildBallSql(o: BallQuery) {
   };
 
   if (o.weight !== undefined) where.push(`weight = ${p.add(o.weight)}`);
+  lowerIn('ball_name', o.name);
   lowerIn('brand_name', o.brand);
   lowerIn('core_name', o.core);
   lowerIn('coverstock_name', o.coverstock);

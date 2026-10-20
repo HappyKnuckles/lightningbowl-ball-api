@@ -159,3 +159,8 @@ test('GET /api/balls/export returns the whole catalog newest first', async () =>
   );
   assert.equal((await call(exportHandler, { weight: 'heavy' })).statusCode, 400);
 });
+
+test('filters by exact ball name, case-insensitively and repeatable', async () => {
+  assert.deepEqual(ids(await call(ballsHandler, { name: ['phaze ii', 'Jackal Ghost'], sort: 'weight,desc' })).sort(), ['1-14', '1-15', '4-15']);
+  assert.deepEqual(ids(await call(ballsHandler, { name: 'phaze' })), [], 'exact, not fuzzy');
+});

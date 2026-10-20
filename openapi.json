@@ -61,6 +61,23 @@
             }
           },
           {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "description": "Ball name (exact, case-insensitive), e.g. to resolve names stored in games. Repeat the parameter for several values.",
+            "schema": {
+              "default": [],
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "brand",
             "in": "query",
             "required": false,
