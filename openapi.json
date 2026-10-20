@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Lightning Bowl Ball API",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "license": {
       "name": "ISC",
       "identifier": "ISC"
@@ -241,10 +241,11 @@
             "name": "releaseDate",
             "in": "query",
             "required": false,
-            "description": "Exact release date as the API returns it.",
+            "description": "Released on exactly this date (YYYY-MM-DD)",
             "schema": {
               "type": "string",
-              "maxLength": 200
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
             }
           },
           {
@@ -333,6 +334,23 @@
             "schema": {
               "type": "number"
             }
+          },
+          {
+            "name": "favorite",
+            "in": "query",
+            "required": false,
+            "description": "Favorites to list first: ball ids (every weight) or `id-weight` keys such as `1234-15`. Does not filter; within favorites and within the rest, `sort` (or relevance) applies. Repeat the parameter for several values.",
+            "schema": {
+              "default": [],
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "style": "form",
+            "explode": true
           },
           {
             "name": "sort",
@@ -1187,20 +1205,7 @@
           },
           "core_weight": {
             "type": "string",
-            "description": "Weight in lbs, e.g. \"15\". A ball exists once per weight."
-          },
-          "availability": {
-            "description": "\"Available\" or a discontinued state.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "ball_image": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "description": "Weight in lbs as bowwwl.com spells it, e.g. \"15\". A ball exists once per weight; `ball_id` + `core_weight` identify it."
           },
           "brand_id": {
             "type": [
@@ -1214,25 +1219,7 @@
               "null"
             ]
           },
-          "core_diff": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "core_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "core_image": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "core_int_diff": {
             "type": [
               "string",
               "null"
@@ -1244,15 +1231,31 @@
               "null"
             ]
           },
-          "core_rg": {
+          "core_type": {
+            "description": "\"Symmetric\" or \"Asymmetric\".",
             "type": [
               "string",
               "null"
             ]
           },
-          "core_type": {
+          "core_rg": {
+            "description": "Core RG, null if unknown.",
             "type": [
-              "string",
+              "number",
+              "null"
+            ]
+          },
+          "core_diff": {
+            "description": "Core differential, null if unknown.",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "core_int_diff": {
+            "description": "Intermediate differential, null if unknown.",
+            "type": [
+              "number",
               "null"
             ]
           },
@@ -1269,6 +1272,7 @@
             ]
           },
           "coverstock_type": {
+            "description": "E.g. \"Solid Reactive\".",
             "type": [
               "string",
               "null"
@@ -1280,19 +1284,8 @@
               "null"
             ]
           },
-          "last_update": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "release_date": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "thumbnail_image": {
+          "availability": {
+            "description": "\"Available\" or a discontinued state.",
             "type": [
               "string",
               "null"
@@ -1305,15 +1298,64 @@
               "null"
             ]
           },
-          "first_seen_at": {
-            "type": "string",
-            "description": "When this ball first appeared in the catalog (ISO timestamp)."
+          "release_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Release date (YYYY-MM-DD), null if unknown."
           },
-          "removed_at": {
-            "description": "Only on `GET /balls/{id}`: when the ball disappeared upstream, or null.",
+          "ball_image": {
+            "description": "Image URL.",
             "type": [
               "string",
               "null"
+            ]
+          },
+          "core_image": {
+            "description": "Image URL.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thumbnail_image": {
+            "description": "Image URL.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_update": {
+            "description": "When bowwwl.com last changed the ball, as it reports it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "first_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "When this ball first appeared in the catalog."
+          },
+          "removed_at": {
+            "description": "Only on `GET /balls/{id}`: when the ball disappeared upstream, or null.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              {
+                "type": "null"
+              }
             ]
           }
         },
@@ -1321,29 +1363,29 @@
           "ball_id",
           "ball_name",
           "core_weight",
-          "availability",
-          "ball_image",
           "brand_id",
           "brand_name",
-          "core_diff",
           "core_id",
-          "core_image",
-          "core_int_diff",
           "core_name",
-          "core_rg",
           "core_type",
+          "core_rg",
+          "core_diff",
+          "core_int_diff",
           "coverstock_id",
           "coverstock_name",
           "coverstock_type",
           "factory_finish",
-          "last_update",
-          "release_date",
-          "thumbnail_image",
+          "availability",
           "us_int",
+          "release_date",
+          "ball_image",
+          "core_image",
+          "thumbnail_image",
+          "last_update",
           "first_seen_at"
         ],
-        "additionalProperties": {},
-        "description": "A ball in one weight, as bowwwl.com describes it, plus catalog metadata."
+        "additionalProperties": false,
+        "description": "A ball in one weight."
       },
       "BallPage": {
         "type": "object",
@@ -1407,6 +1449,7 @@
             "type": "string"
           },
           "logo": {
+            "description": "Logo URL.",
             "type": [
               "string",
               "null"
@@ -1415,9 +1458,10 @@
         },
         "required": [
           "id",
-          "brand_name"
+          "brand_name",
+          "logo"
         ],
-        "additionalProperties": {}
+        "additionalProperties": false
       },
       "BrandPage": {
         "type": "object",
@@ -1448,12 +1492,7 @@
             "type": "string"
           },
           "brand": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "api_filter_url": {
+            "description": "Brand name.",
             "type": [
               "string",
               "null"
@@ -1465,7 +1504,7 @@
           "core_name",
           "brand"
         ],
-        "additionalProperties": {}
+        "additionalProperties": false
       },
       "CorePage": {
         "type": "object",
@@ -1496,12 +1535,7 @@
             "type": "string"
           },
           "brand": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "api_filter_url": {
+            "description": "Brand name.",
             "type": [
               "string",
               "null"
@@ -1513,7 +1547,7 @@
           "coverstock_name",
           "brand"
         ],
-        "additionalProperties": {}
+        "additionalProperties": false
       },
       "CoverstockPage": {
         "type": "object",

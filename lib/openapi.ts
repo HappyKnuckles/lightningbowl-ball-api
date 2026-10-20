@@ -104,7 +104,7 @@ export function buildOpenApi(): JsonSchema {
     openapi: '3.1.0',
     info: {
       title: 'Lightning Bowl Ball API',
-      version: '1.0.0',
+      version: '2.0.0',
       license: { name: 'ISC', identifier: 'ISC' },
       description:
         'Ball catalog for Lightning Bowl, mirrored nightly from bowwwl.com into Postgres. Search, filtering, sorting and paging run in the database.\n\n' +

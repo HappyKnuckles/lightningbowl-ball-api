@@ -28,7 +28,7 @@ Local development: copy `.env.example` to `.env.local`, then `npm install`, `npm
 - **Failures are isolated.** Each part (a table or a weight) succeeds or fails on its own, and the run ends as `success`, `partial` or `failed`.
 - **Runs are logged** in `sync_runs`. Overlapping runs are skipped, and runs that never finished are closed out after 30 minutes. `GET /api/health` shows the latest run.
 
-Every row keeps the untouched upstream object in `raw`, and the API returns that object, so clients get exactly the shape they know from bowwwl.com. The typed columns next to it are what queries run on.
+Every row keeps the untouched upstream object in `raw` for reference. Queries and responses use the typed columns next to it: specs (`core_rg`, `core_diff`, `core_int_diff`) are numbers or `null`, `release_date` is `YYYY-MM-DD`, and every response object has exactly the fields its schema lists. Field names match bowwwl.com's.
 
 ## Docs and types
 
@@ -62,7 +62,7 @@ Paged response:
 
 ```json
 {
-  "content": [{ "ball_id": "…", "ball_name": "…", "first_seen_at": "…" }],
+  "content": [{ "ball_id": "1234", "ball_name": "Phaze V", "core_weight": "15", "core_rg": 2.49, "core_diff": 0.052, "release_date": "2023-05-01", "…": "…" }],
   "page": { "number": 0, "size": 20, "totalElements": 1234, "totalPages": 62 }
 }
 ```
@@ -77,11 +77,12 @@ Paged response:
 | `market` | `US` or `Overseas`. |
 | `coreType` | `Symmetric` or `Asymmetric`. |
 | `available` | `true` = available only, `false` = discontinued only. |
-| `releaseDate` | Exact release date as the API returns it. |
+| `releaseDate` | Exact release date, `YYYY-MM-DD`. |
 | `releasedAfter`, `releasedBefore` | Release date range, `YYYY-MM-DD`, inclusive. |
 | `addedAfter` | Balls that first appeared in the catalog on or after this date (`YYYY-MM-DD`). |
 | `minRg`, `maxRg`, `minDiff`, `maxDiff`, `minIntDiff`, `maxIntDiff` | Core spec ranges, inclusive. |
 | `id` / `excludeId` | Include only / leave out these ball IDs, repeatable. |
+| `favorite` | Ball ids (every weight) or `id-weight` keys (`1234-15`) to list first. Doesn't filter; `sort` or relevance applies within favorites and within the rest. Repeatable. |
 | `sort` | `ball_name`, `brand_name`, `release_date`, `first_seen_at`, `core_rg`, `core_diff`, `core_int_diff`, `core_type`, `coverstock_type`, `factory_finish`, `weight`. |
 | `page`, `size` | Paging. |
 
@@ -92,6 +93,7 @@ The default order is newest release first.
 /api/balls?search=phaze,widow&available=true
 /api/balls?core=Velocity&excludeId=1234&weight=15     # same core
 /api/balls?addedAfter=2026-10-01&sort=first_seen_at,desc   # new in the catalog
+/api/balls?weight=15&favorite=1234-15&favorite=987-15       # favorites first
 ```
 
 ### `GET /api/balls/export[?weight=15]`

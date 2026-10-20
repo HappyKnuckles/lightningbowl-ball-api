@@ -36,8 +36,19 @@ const SEARCH_COLUMNS: [column: string, weight: number][] = [
   ['factory_finish', 0.5],
 ];
 
-/** What the API returns per ball: the upstream object plus when we first saw it. */
-const BALL_JSON = `raw || jsonb_build_object('first_seen_at', first_seen_at)`;
+/** What the API returns per ball (the `Ball` schema), built from the typed columns. */
+const BALL_JSON = `jsonb_build_object(
+  'ball_id', ball_id, 'ball_name', ball_name, 'core_weight', core_weight,
+  'brand_id', brand_id, 'brand_name', brand_name,
+  'core_id', core_id, 'core_name', core_name, 'core_type', core_type,
+  'core_rg', core_rg::float8, 'core_diff', core_diff::float8, 'core_int_diff', core_int_diff::float8,
+  'coverstock_id', coverstock_id, 'coverstock_name', coverstock_name, 'coverstock_type', coverstock_type,
+  'factory_finish', factory_finish, 'availability', availability, 'us_int', us_int,
+  'release_date', to_char(release_date, 'YYYY-MM-DD'),
+  'ball_image', nullif(raw->>'ball_image', ''), 'core_image', nullif(raw->>'core_image', ''),
+  'thumbnail_image', nullif(raw->>'thumbnail_image', ''), 'last_update', nullif(raw->>'last_update', ''),
+  'first_seen_at', first_seen_at
+)`;
 
 /** Comma-separated search terms, lower-cased, at most 10. */
 export function searchTerms(search: string | undefined): string[] {
@@ -74,7 +85,7 @@ export function buildBallSql(o: BallQuery) {
   if (o.coreType) where.push(`core_type = ${p.add(o.coreType)}`);
   if (o.available === true) where.push(`availability = 'Available'`);
   if (o.available === false) where.push(`availability IS DISTINCT FROM 'Available'`);
-  if (o.releaseDate) where.push(`raw->>'release_date' = ${p.add(o.releaseDate)}`);
+  if (o.releaseDate) where.push(`release_date = ${p.add(o.releaseDate)}::date`);
   range('release_date', o.releasedAfter, o.releasedBefore);
   if (o.addedAfter) where.push(`first_seen_at >= ${p.add(o.addedAfter)}::date`);
   range('core_rg', o.minRg, o.maxRg);
@@ -99,19 +110,28 @@ export function buildBallSql(o: BallQuery) {
 
   // With a search and no explicit sort, best matches come first.
   const explicit = sortOrders<BallSortField>(o.sort);
-  const orders =
-    explicit.length > 0
+  const orders: string[] = [];
+  // Parameters added from here on only appear in ORDER BY, not in WHERE.
+  const whereParamCount = p.values.length;
+  if (o.favorite.length > 0) {
+    // Favorites first; the regular order applies within each group.
+    const favorites = p.add(o.favorite);
+    orders.push(`(ball_id = ANY(${favorites}::text[]) OR ball_id || '-' || core_weight = ANY(${favorites}::text[])) DESC`);
+  }
+  orders.push(
+    ...(explicit.length > 0
       ? explicit.map(({ field, direction }) => `${SORT_SQL[field]} ${direction.toUpperCase()} NULLS LAST`)
       : relevance
         ? ['relevance DESC']
-        : DEFAULT_SORT.map(({ field, direction }) => `${SORT_SQL[field]} ${direction.toUpperCase()} NULLS LAST`);
+        : DEFAULT_SORT.map(({ field, direction }) => `${SORT_SQL[field]} ${direction.toUpperCase()} NULLS LAST`)),
+  );
   orders.push('ball_id', 'core_weight'); // deterministic paging
 
-  return { where: where.join(' AND '), relevance, orderBy: orders.join(', '), params: p.values };
+  return { where: where.join(' AND '), relevance, orderBy: orders.join(', '), params: p.values, whereParams: p.values.slice(0, whereParamCount) };
 }
 
 export async function findBalls(options: BallQuery): Promise<BallPage> {
-  const { where, relevance, orderBy, params } = buildBallSql(options);
+  const { where, relevance, orderBy, params, whereParams } = buildBallSql(options);
   const limit = `$${params.length + 1}`;
   const offset = `$${params.length + 2}`;
 
@@ -124,7 +144,7 @@ export async function findBalls(options: BallQuery): Promise<BallPage> {
       await client.query('SET LOCAL enable_seqscan = off');
     }
     const [{ rows: countRows }, { rows }] = await Promise.all([
-      client.query<{ total: number }>(`SELECT count(*)::int AS total FROM balls WHERE ${where}`, params),
+      client.query<{ total: number }>(`SELECT count(*)::int AS total FROM balls WHERE ${where}`, whereParams),
       client.query<{ ball: Ball }>(
         `SELECT ${BALL_JSON} AS ball${relevance ? `, ${relevance} AS relevance` : ''}
          FROM balls WHERE ${where} ORDER BY ${orderBy} LIMIT ${limit} OFFSET ${offset}`,

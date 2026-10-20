@@ -103,7 +103,7 @@ export const BallQuery = z
     market: z.enum(MARKETS).optional().meta({ description: 'Market (case-insensitive).' }),
     coreType: z.enum(CORE_TYPES).optional().meta({ description: 'Core type (case-insensitive).' }),
     available: boolean('`true`: only available balls, `false`: only discontinued ones.'),
-    releaseDate: text('Exact release date as the API returns it.'),
+    releaseDate: date('Released on exactly this date'),
     releasedAfter: date('Released on or after this date'),
     releasedBefore: date('Released on or before this date'),
     addedAfter: date('First appeared in the catalog on or after this date'),
@@ -113,6 +113,9 @@ export const BallQuery = z
     maxDiff: number('Maximum core differential.'),
     minIntDiff: number('Minimum intermediate differential.'),
     maxIntDiff: number('Maximum intermediate differential.'),
+    favorite: list(
+      'Favorites to list first: ball ids (every weight) or `id-weight` keys such as `1234-15`. Does not filter; within favorites and within the rest, `sort` (or relevance) applies.',
+    ),
     sort: sortParam(BALL_SORT_FIELDS),
     ...pagingParams,
   })
@@ -178,39 +181,48 @@ export type CatalogQuery = z.output<typeof CoreQuery>;
 
 // ------------------------------------------------------------------ responses
 
-// Upstream (bowwwl.com) sends every value as a string; the API passes the
-// objects through unchanged, so these mirror that shape. Unknown extra fields
-// are kept (loose objects).
-const upstreamText = z.string().nullable();
+// Responses are built from the typed columns, not passed through from
+// upstream: numbers are numbers, dates are ISO dates, and every object is
+// closed (no fields beyond the ones listed here).
+const nullableText = (description?: string) => (description ? z.string().nullable().meta({ description }) : z.string().nullable());
+const nullableNumber = (description: string) => z.number().nullable().meta({ description });
 
 export const Ball = z
-  .looseObject({
+  .strictObject({
     ball_id: z.string(),
     ball_name: z.string(),
-    core_weight: z.string().meta({ description: 'Weight in lbs, e.g. "15". A ball exists once per weight.' }),
-    availability: upstreamText.meta({ description: '"Available" or a discontinued state.' }),
-    ball_image: upstreamText,
-    brand_id: upstreamText,
-    brand_name: upstreamText,
-    core_diff: upstreamText,
-    core_id: upstreamText,
-    core_image: upstreamText,
-    core_int_diff: upstreamText,
-    core_name: upstreamText,
-    core_rg: upstreamText,
-    core_type: upstreamText,
-    coverstock_id: upstreamText,
-    coverstock_name: upstreamText,
-    coverstock_type: upstreamText,
-    factory_finish: upstreamText,
-    last_update: upstreamText,
-    release_date: upstreamText,
-    thumbnail_image: upstreamText,
-    us_int: upstreamText.meta({ description: '"US" or "Overseas".' }),
-    first_seen_at: z.string().meta({ description: 'When this ball first appeared in the catalog (ISO timestamp).' }),
-    removed_at: z.string().nullable().optional().meta({ description: 'Only on `GET /balls/{id}`: when the ball disappeared upstream, or null.' }),
+    core_weight: z
+      .string()
+      .meta({
+        description: 'Weight in lbs as bowwwl.com spells it, e.g. "15". A ball exists once per weight; `ball_id` + `core_weight` identify it.',
+      }),
+    brand_id: nullableText(),
+    brand_name: nullableText(),
+    core_id: nullableText(),
+    core_name: nullableText(),
+    core_type: nullableText('"Symmetric" or "Asymmetric".'),
+    core_rg: nullableNumber('Core RG, null if unknown.'),
+    core_diff: nullableNumber('Core differential, null if unknown.'),
+    core_int_diff: nullableNumber('Intermediate differential, null if unknown.'),
+    coverstock_id: nullableText(),
+    coverstock_name: nullableText(),
+    coverstock_type: nullableText('E.g. "Solid Reactive".'),
+    factory_finish: nullableText(),
+    availability: nullableText('"Available" or a discontinued state.'),
+    us_int: nullableText('"US" or "Overseas".'),
+    release_date: z.iso.date().nullable().meta({ description: 'Release date (YYYY-MM-DD), null if unknown.' }),
+    ball_image: nullableText('Image URL.'),
+    core_image: nullableText('Image URL.'),
+    thumbnail_image: nullableText('Image URL.'),
+    last_update: nullableText('When bowwwl.com last changed the ball, as it reports it.'),
+    first_seen_at: z.iso.datetime({ offset: true }).meta({ description: 'When this ball first appeared in the catalog.' }),
+    removed_at: z.iso
+      .datetime({ offset: true })
+      .nullable()
+      .optional()
+      .meta({ description: 'Only on `GET /balls/{id}`: when the ball disappeared upstream, or null.' }),
   })
-  .meta({ id: 'Ball', description: 'A ball in one weight, as bowwwl.com describes it, plus catalog metadata.' });
+  .meta({ id: 'Ball', description: 'A ball in one weight.' });
 
 export type Ball = z.infer<typeof Ball>;
 
@@ -229,12 +241,10 @@ export const BallPage = z
 
 export type BallPage = z.infer<typeof BallPage>;
 
-export const Brand = z.looseObject({ id: z.string(), brand_name: z.string(), logo: upstreamText.optional() }).meta({ id: 'Brand' });
-export const Core = z
-  .looseObject({ id: z.string(), core_name: z.string(), brand: upstreamText, api_filter_url: upstreamText.optional() })
-  .meta({ id: 'Core' });
+export const Brand = z.strictObject({ id: z.string(), brand_name: z.string(), logo: nullableText('Logo URL.') }).meta({ id: 'Brand' });
+export const Core = z.strictObject({ id: z.string(), core_name: z.string(), brand: nullableText('Brand name.') }).meta({ id: 'Core' });
 export const Coverstock = z
-  .looseObject({ id: z.string(), coverstock_name: z.string(), brand: upstreamText, api_filter_url: upstreamText.optional() })
+  .strictObject({ id: z.string(), coverstock_name: z.string(), brand: nullableText('Brand name.') })
   .meta({ id: 'Coverstock' });
 
 export type Brand = z.infer<typeof Brand>;

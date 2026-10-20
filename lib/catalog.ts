@@ -6,6 +6,8 @@ import { BrandQuery, CoreQuery, CoverstockQuery, DEFAULT_PAGE_SIZE, parseQuery, 
 
 interface CatalogConfig {
   schema: typeof BrandQuery | typeof CoreQuery | typeof CoverstockQuery;
+  /** The response object (the `Brand` / `Core` / `Coverstock` schema), built from the columns. */
+  json: string;
   searchExpr: string;
   sortSql: Record<string, string>;
   defaultOrder: string;
@@ -14,18 +16,21 @@ interface CatalogConfig {
 export const CATALOGS = {
   brands: {
     schema: BrandQuery,
+    json: `jsonb_build_object('id', id, 'brand_name', name, 'logo', nullif(raw->>'logo', ''))`,
     searchExpr: 'lower(name)',
     sortSql: { brand_name: 'lower(name)' },
     defaultOrder: 'lower(name)',
   },
   cores: {
     schema: CoreQuery,
+    json: `jsonb_build_object('id', id, 'core_name', name, 'brand', brand)`,
     searchExpr: `lower(name) || ' ' || lower(coalesce(brand, ''))`,
     sortSql: { core_name: 'lower(name)', brand: 'lower(brand)' },
     defaultOrder: 'lower(brand), lower(name)',
   },
   coverstocks: {
     schema: CoverstockQuery,
+    json: `jsonb_build_object('id', id, 'coverstock_name', name, 'brand', brand)`,
     searchExpr: `lower(name) || ' ' || lower(coalesce(brand, ''))`,
     sortSql: { coverstock_name: 'lower(name)', brand: 'lower(brand)' },
     defaultOrder: 'lower(brand), lower(name)',
@@ -52,21 +57,21 @@ export async function findCatalog(table: CatalogTable, raw: RawQuery) {
   const whereSql = where.join(' AND ');
 
   if (!paging) {
-    const { rows } = await query<{ raw: unknown }>(`SELECT raw FROM ${table} WHERE ${whereSql} ORDER BY ${orderBy}`, p.values);
-    return rows.map((r) => r.raw);
+    const { rows } = await query<{ item: unknown }>(`SELECT ${config.json} AS item FROM ${table} WHERE ${whereSql} ORDER BY ${orderBy}`, p.values);
+    return rows.map((r) => r.item);
   }
 
   const n = p.values.length;
   const [{ rows: countRows }, { rows }] = await Promise.all([
     query<{ total: number }>(`SELECT count(*)::int AS total FROM ${table} WHERE ${whereSql}`, p.values),
-    query<{ raw: unknown }>(`SELECT raw FROM ${table} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT $${n + 1} OFFSET $${n + 2}`, [
+    query<{ item: unknown }>(`SELECT ${config.json} AS item FROM ${table} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT $${n + 1} OFFSET $${n + 2}`, [
       ...p.values,
       paging.size,
       paging.page * paging.size,
     ]),
   ]);
   return pageOf(
-    rows.map((r) => r.raw),
+    rows.map((r) => r.item),
     paging,
     countRows[0]?.total ?? 0,
   );
