@@ -133,7 +133,7 @@ The plan is for the app to send a snapshot of its own totals, which replaces tha
 
 | Variable | |
 | --- | --- |
-| `DATABASE_URL` | Neon pooled connection string (required). |
+| `DATABASE_URL` | Neon pooled connection string (required). `POSTGRES_URL` also works; Vercel's Neon integration sets both. |
 | `CRON_SECRET` | Protects `/api/cron/sync` (required in production). |
 | `ALLOWED_ORIGINS` | Comma-separated CORS origins. Vercel previews of the app are always allowed. |
 | `SYNC_WEIGHTS` | Weights to sync, default `12,13,14,15,16`. |

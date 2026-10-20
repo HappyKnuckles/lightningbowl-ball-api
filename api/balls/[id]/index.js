@@ -1,5 +1,5 @@
 // GET /api/balls/{id}[?weight=lbs] — all weight variants of one ball.
-import { withCors } from '../../../middleware.js';
+import { withCors } from '../../../lib/cors.js';
 import { findBallVariants } from '../../../lib/balls.js';
 import { parseNumber, parseRequired } from '../../../lib/params.js';
 import { sendJson, withErrorHandling } from '../../../lib/respond.js';
