@@ -1,12 +1,13 @@
 // GET /api/balls/{id}[?weight=lbs] — all weight variants of one ball.
-import { withCors } from '../../../lib/cors.js';
 import { findBallVariants } from '../../../lib/balls.js';
-import { parseNumber, parseRequired } from '../../../lib/params.js';
+import { withCors } from '../../../lib/cors.js';
+import type { ApiRequest, ApiResponse } from '../../../lib/http.js';
 import { sendJson, withErrorHandling } from '../../../lib/respond.js';
+import { BallIdPath, parseQuery, WeightQuery } from '../../../lib/schemas.js';
 
-async function handler(req, res) {
-  const id = parseRequired('id', req.query.id);
-  const weight = parseNumber('weight', req.query.weight, { min: 0, max: 20 });
+async function handler(req: ApiRequest, res: ApiResponse) {
+  const { id } = parseQuery(BallIdPath, req.query);
+  const { weight } = parseQuery(WeightQuery, req.query);
 
   const variants = await findBallVariants(id, weight);
   if (variants.length === 0) {

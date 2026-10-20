@@ -2,6 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [{ "path": "/api/cron/sync", "schedule": "17 1 * * *" }],
   "functions": {
-    "api/cron/sync.js": { "maxDuration": 300, "includeFiles": "migrations/**" }
+    "api/cron/sync.ts": { "maxDuration": 300, "includeFiles": "migrations/**" }
   }
 }

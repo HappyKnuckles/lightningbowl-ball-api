@@ -4,11 +4,11 @@
 import pg from 'pg';
 
 // Return `date` columns as 'YYYY-MM-DD' strings instead of local-time Date objects.
-pg.types.setTypeParser(pg.types.builtins.DATE, (value) => value);
+pg.types.setTypeParser(pg.types.builtins.DATE, (value: string) => value);
 
-let pool;
+let pool: pg.Pool | undefined;
 
-export function getPool() {
+export function getPool(): pg.Pool {
   if (!pool) {
     // DATABASE_URL is the Neon pooled string; POSTGRES_URL is the same value
     // under the name Vercel's Neon integration also sets.
@@ -27,12 +27,12 @@ export function getPool() {
   return pool;
 }
 
-export function query(text, params) {
-  return getPool().query(text, params);
+export function query<R extends pg.QueryResultRow = pg.QueryResultRow>(text: string, params?: unknown[]): Promise<pg.QueryResult<R>> {
+  return getPool().query<R>(text, params);
 }
 
 /** Runs `fn(client)` inside a transaction (BEGIN … COMMIT / ROLLBACK). */
-export async function withTransaction(fn) {
+export async function withTransaction<T>(fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {
   const client = await getPool().connect();
   try {
     await client.query('BEGIN');
@@ -47,7 +47,7 @@ export async function withTransaction(fn) {
   }
 }
 
-export async function closePool() {
+export async function closePool(): Promise<void> {
   if (pool) {
     const p = pool;
     pool = undefined;

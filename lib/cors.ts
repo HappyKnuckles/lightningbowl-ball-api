@@ -1,5 +1,7 @@
+import type { ApiRequest, ApiResponse, Handler } from './http.js';
+
 // Rate limiting store (in-memory)
-const rateLimitStore = new Map();
+const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 
 // Clean up old entries every 5 minutes. unref() lets Node test runs exit;
 // it's optional because other runtimes return a plain number here.
@@ -20,8 +22,9 @@ const RATE_LIMIT = {
 };
 
 // Rate limiter middleware
-function rateLimit(req, res) {
-  const clientId = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || 'unknown';
+function rateLimit(req: ApiRequest, res: ApiResponse): boolean {
+  const forwarded = req.headers['x-forwarded-for'];
+  const clientId = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0] || req.socket?.remoteAddress || 'unknown';
 
   const now = Date.now();
   const clientData = rateLimitStore.get(clientId);
@@ -67,8 +70,8 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
 const vercelPreviewRegex = /^https:\/\/lightningbowl-[a-z0-9]+(?:-[a-z0-9]+)*-nicos-projects-1c3811a7\.vercel\.app$/;
 
 // CORS middleware wrapper for Vercel serverless functions
-export function withCors(handler) {
-  return async (req, res) => {
+export function withCors(handler: Handler): Handler {
+  return async (req: ApiRequest, res: ApiResponse) => {
     // Apply rate limiting first
     if (!rateLimit(req, res)) {
       return; // Rate limit exceeded, response already sent
@@ -77,7 +80,7 @@ export function withCors(handler) {
     const origin = req.headers.origin;
 
     // More strict CORS - only allow credentials for known origins or Vercel preview deployments
-    const isAllowedOrigin = allowedOrigins.includes(origin) || (!!origin && vercelPreviewRegex.test(origin));
+    const isAllowedOrigin = !!origin && (allowedOrigins.includes(origin) || vercelPreviewRegex.test(origin));
 
     if (isAllowedOrigin) {
       res.setHeader('Access-Control-Allow-Origin', origin);

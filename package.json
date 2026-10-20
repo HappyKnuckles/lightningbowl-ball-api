@@ -3,17 +3,25 @@
   "version": "1.0.0",
   "description": "Ball catalog API for Lightning Bowl, mirrored nightly from bowwwl.com into Postgres",
   "scripts": {
-    "dev": "node dev-server.js",
-    "migrate": "node scripts/migrate.js",
-    "sync": "node scripts/sync.js",
-    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\""
+    "dev": "tsx dev-server.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "migrate": "tsx scripts/migrate.ts",
+    "sync": "tsx scripts/sync.ts",
+    "openapi": "tsx scripts/openapi.ts",
+    "test": "node --import tsx --test --test-concurrency=1 \"test/**/*.test.ts\""
   },
   "license": "ISC",
   "dependencies": {
-    "pg": "^8.23.1"
+    "pg": "^8.23.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "embedded-postgres": "^18.4.0-beta.17"
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
   },
   "private": true,
   "type": "module",

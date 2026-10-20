@@ -4,15 +4,24 @@ export const UPSTREAM_BASE = process.env.BOWWWL_API_BASE || 'https://bowwwl.com/
 
 const USER_AGENT = 'lightningbowl-ball-api/1.0';
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * GETs a JSON array. Retries network errors, timeouts and 5xx/429 responses
  * with exponential backoff; 4xx responses fail immediately.
  */
-export async function fetchList(path, { fetchFn = fetch, timeoutMs = 30000, retries = 3, backoffMs = 2000 } = {}) {
+export type FetchFn = (url: string, init: RequestInit) => Promise<Pick<Response, 'ok' | 'status' | 'json'>>;
+
+export interface FetchOptions {
+  fetchFn?: FetchFn;
+  timeoutMs?: number;
+  retries?: number;
+  backoffMs?: number;
+}
+
+export async function fetchList(path: string, { fetchFn = fetch, timeoutMs = 30000, retries = 3, backoffMs = 2000 }: FetchOptions = {}): Promise<unknown[]> {
   const url = `${UPSTREAM_BASE}${path}`;
-  let lastError;
+  let lastError: Error = new Error(`${url}: no attempt made`);
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     if (attempt > 0) await sleep(backoffMs * 2 ** (attempt - 1));
@@ -24,7 +33,8 @@ export async function fetchList(path, { fetchFn = fetch, timeoutMs = 30000, retr
         signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
-      lastError = new Error(`${url}: ${error.name === 'TimeoutError' ? 'timed out' : error.message}`);
+      const err = error as Error;
+      lastError = new Error(`${url}: ${err.name === 'TimeoutError' ? 'timed out' : err.message}`);
       continue;
     }
 
@@ -34,7 +44,7 @@ export async function fetchList(path, { fetchFn = fetch, timeoutMs = 30000, retr
       continue;
     }
 
-    const data = await response.json();
+    const data: unknown = await response.json();
     if (!Array.isArray(data)) {
       throw new Error(`${url}: expected a JSON array`);
     }
@@ -50,10 +60,13 @@ export async function fetchList(path, { fetchFn = fetch, timeoutMs = 30000, retr
  * own site uses. v2 may ignore `page` and return everything at once, so
  * paging stops as soon as a page adds no new balls.
  */
-export async function fetchV2Catalog(options = {}, { batchSize = 4, maxPages = 400 } = {}) {
-  const byKey = new Map();
-  const keyOf = (ball) => `${ball?.ball_id}|${ball?.core_weight}`;
-  const addPage = (page) => {
+export async function fetchV2Catalog(options: FetchOptions = {}, { batchSize = 4, maxPages = 400 } = {}): Promise<unknown[]> {
+  const byKey = new Map<string, unknown>();
+  const keyOf = (ball: unknown) => {
+    const b = (ball ?? {}) as { ball_id?: unknown; core_weight?: unknown };
+    return `${String(b.ball_id)}|${String(b.core_weight)}`;
+  };
+  const addPage = (page: unknown[]) => {
     let added = 0;
     for (const ball of page) {
       const key = keyOf(ball);
@@ -64,7 +77,7 @@ export async function fetchV2Catalog(options = {}, { batchSize = 4, maxPages = 4
     }
     return added;
   };
-  const getPage = (page) => fetchList(`/balls/v2?page=${page}`, { timeoutMs: 60000, ...options });
+  const getPage = (page: number) => fetchList(`/balls/v2?page=${page}`, { timeoutMs: 60000, ...options });
 
   // Pages 0 and 1 one at a time: if page 1 adds nothing, page 0 was everything
   // and the parallel batches below would just download the full list again.

@@ -1,25 +1,11 @@
 // Ball queries: filtering, fuzzy search, sorting and paging run in Postgres.
 
 import { query, withTransaction } from './db.js';
-import {
-  BadRequestError,
-  escapeLike,
-  pageOf,
-  parseBoolean,
-  parseDate,
-  parseEnum,
-  parseList,
-  parseNumber,
-  parsePageable,
-  parseSort,
-  parseString,
-} from './params.js';
+import { escapeLike, pageOf, SqlParams } from './params.js';
+import { type Ball, type BallPage, type BallQuery, type BallSortField, sortOrders } from './schemas.js';
 
-export const MARKETS = ['US', 'Overseas'];
-export const CORE_TYPES = ['Symmetric', 'Asymmetric'];
-
-/** Public sort field → SQL expression (matches the indexes in 001_init.sql). */
-export const BALL_SORT_FIELDS = {
+/** Sort field → SQL expression (matches the indexes in 001_init.sql). */
+const SORT_SQL: Record<BallSortField, string> = {
   ball_name: 'lower(ball_name)',
   brand_name: 'lower(brand_name)',
   release_date: 'release_date',
@@ -33,7 +19,7 @@ export const BALL_SORT_FIELDS = {
   weight: 'weight',
 };
 
-const DEFAULT_SORT = [
+const DEFAULT_SORT: { field: BallSortField; direction: 'asc' | 'desc' }[] = [
   { field: 'release_date', direction: 'desc' },
   { field: 'ball_name', direction: 'asc' },
 ];
@@ -42,7 +28,7 @@ const DEFAULT_SORT = [
 const SEARCH_THRESHOLD = 0.45;
 
 /** Columns searched, with the same relative weights the app used with Fuse.js. */
-const SEARCH_COLUMNS = [
+const SEARCH_COLUMNS: [column: string, weight: number][] = [
   ['ball_name', 1],
   ['brand_name', 0.9],
   ['core_name', 0.7],
@@ -53,85 +39,36 @@ const SEARCH_COLUMNS = [
 /** What the API returns per ball: the upstream object plus when we first saw it. */
 const BALL_JSON = `raw || jsonb_build_object('first_seen_at', first_seen_at)`;
 
-export function parseBallQuery(q) {
-  const search = parseString('search', q.search ?? q.q);
-  const options = {
-    searchTerms: search
-      ? search
-          .split(',')
-          .map((t) => t.trim().toLowerCase())
-          .filter(Boolean)
-          .slice(0, 10)
-      : [],
-    weight: parseNumber('weight', q.weight, { min: 0, max: 20 }),
-    brands: parseList('brand', q.brand),
-    cores: parseList('core', q.core),
-    coverstocks: parseList('coverstock', q.coverstock),
-    coverstockTypes: parseList('coverstockType', q.coverstockType),
-    factoryFinishes: parseList('factoryFinish', q.factoryFinish),
-    ids: parseList('id', q.id),
-    excludeIds: parseList('excludeId', q.excludeId),
-    market: parseEnum('market', q.market, MARKETS),
-    coreType: parseEnum('coreType', q.coreType, CORE_TYPES),
-    available: parseBoolean('available', q.available),
-    releaseDate: parseString('releaseDate', q.releaseDate),
-    releasedAfter: parseDate('releasedAfter', q.releasedAfter),
-    releasedBefore: parseDate('releasedBefore', q.releasedBefore),
-    addedAfter: parseDate('addedAfter', q.addedAfter),
-    minRg: parseNumber('minRg', q.minRg),
-    maxRg: parseNumber('maxRg', q.maxRg),
-    minDiff: parseNumber('minDiff', q.minDiff),
-    maxDiff: parseNumber('maxDiff', q.maxDiff),
-    minIntDiff: parseNumber('minIntDiff', q.minIntDiff),
-    maxIntDiff: parseNumber('maxIntDiff', q.maxIntDiff),
-    sort: parseSort(q.sort, BALL_SORT_FIELDS),
-    ...parsePageable(q),
-  };
-
-  for (const [min, max] of [
-    ['minRg', 'maxRg'],
-    ['minDiff', 'maxDiff'],
-    ['minIntDiff', 'maxIntDiff'],
-    ['releasedAfter', 'releasedBefore'],
-  ]) {
-    if (options[min] !== undefined && options[max] !== undefined && options[min] > options[max]) {
-      throw new BadRequestError(`"${min}" must not be greater than "${max}"`);
-    }
-  }
-
-  return options;
-}
-
-/** Collects bind parameters and hands out their `$n` placeholders. */
-class Params {
-  values = [];
-  add(value) {
-    this.values.push(value);
-    return `$${this.values.length}`;
-  }
+/** Comma-separated search terms, lower-cased, at most 10. */
+export function searchTerms(search: string | undefined): string[] {
+  return (search ?? '')
+    .split(',')
+    .map((t) => t.trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, 10);
 }
 
 /** Builds WHERE, relevance and ORDER BY clauses for a parsed query. */
-export function buildBallSql(o) {
-  const p = new Params();
+export function buildBallSql(o: BallQuery) {
+  const p = new SqlParams();
   const where = ['removed_at IS NULL'];
 
-  const lowerIn = (column, values) => {
+  const lowerIn = (column: string, values: string[]) => {
     if (values.length > 0) where.push(`lower(${column}) = ANY(${p.add(values.map((v) => v.toLowerCase()))}::text[])`);
   };
-  const range = (column, min, max) => {
+  const range = (column: string, min: number | string | undefined, max: number | string | undefined) => {
     if (min !== undefined) where.push(`${column} >= ${p.add(min)}`);
     if (max !== undefined) where.push(`${column} <= ${p.add(max)}`);
   };
 
   if (o.weight !== undefined) where.push(`weight = ${p.add(o.weight)}`);
-  lowerIn('brand_name', o.brands);
-  lowerIn('core_name', o.cores);
-  lowerIn('coverstock_name', o.coverstocks);
-  lowerIn('coverstock_type', o.coverstockTypes);
-  lowerIn('factory_finish', o.factoryFinishes);
-  if (o.ids.length > 0) where.push(`ball_id = ANY(${p.add(o.ids)}::text[])`);
-  if (o.excludeIds.length > 0) where.push(`NOT (ball_id = ANY(${p.add(o.excludeIds)}::text[]))`);
+  lowerIn('brand_name', o.brand);
+  lowerIn('core_name', o.core);
+  lowerIn('coverstock_name', o.coverstock);
+  lowerIn('coverstock_type', o.coverstockType);
+  lowerIn('factory_finish', o.factoryFinish);
+  if (o.id.length > 0) where.push(`ball_id = ANY(${p.add(o.id)}::text[])`);
+  if (o.excludeId.length > 0) where.push(`NOT (ball_id = ANY(${p.add(o.excludeId)}::text[]))`);
   if (o.market) where.push(`us_int = ${p.add(o.market)}`);
   if (o.coreType) where.push(`core_type = ${p.add(o.coreType)}`);
   if (o.available === true) where.push(`availability = 'Available'`);
@@ -143,11 +80,12 @@ export function buildBallSql(o) {
   range('core_diff', o.minDiff, o.maxDiff);
   range('core_int_diff', o.minIntDiff, o.maxIntDiff);
 
-  let relevance = null;
-  if (o.searchTerms.length > 0) {
-    const matches = [];
-    const scores = [];
-    for (const term of o.searchTerms) {
+  let relevance: string | null = null;
+  const terms = searchTerms(o.search);
+  if (terms.length > 0) {
+    const matches: string[] = [];
+    const scores: string[] = [];
+    for (const term of terms) {
       const t = p.add(term);
       const like = p.add(`%${escapeLike(term)}%`);
       // `<%` (word similarity) and LIKE both use the trigram index on search_text.
@@ -155,22 +93,23 @@ export function buildBallSql(o) {
       scores.push(`GREATEST(${SEARCH_COLUMNS.map(([col, w]) => `${w} * word_similarity(${t}, lower(coalesce(${col}, '')))`).join(', ')})`);
     }
     where.push(`(${matches.join(' OR ')})`);
-    relevance = scores.length === 1 ? scores[0] : `GREATEST(${scores.join(', ')})`;
+    relevance = scores.length === 1 ? scores[0]! : `GREATEST(${scores.join(", ")})`;
   }
 
   // With a search and no explicit sort, best matches come first.
+  const explicit = sortOrders<BallSortField>(o.sort);
   const orders =
-    o.sort.length > 0
-      ? o.sort.map(({ field, direction }) => `${BALL_SORT_FIELDS[field]} ${direction.toUpperCase()} NULLS LAST`)
+    explicit.length > 0
+      ? explicit.map(({ field, direction }) => `${SORT_SQL[field]} ${direction.toUpperCase()} NULLS LAST`)
       : relevance
         ? ['relevance DESC']
-        : DEFAULT_SORT.map(({ field, direction }) => `${BALL_SORT_FIELDS[field]} ${direction.toUpperCase()} NULLS LAST`);
+        : DEFAULT_SORT.map(({ field, direction }) => `${SORT_SQL[field]} ${direction.toUpperCase()} NULLS LAST`);
   orders.push('ball_id', 'core_weight'); // deterministic paging
 
   return { where: where.join(' AND '), relevance, orderBy: orders.join(', '), params: p.values };
 }
 
-export async function findBalls(options) {
+export async function findBalls(options: BallQuery): Promise<BallPage> {
   const { where, relevance, orderBy, params } = buildBallSql(options);
   const limit = `$${params.length + 1}`;
   const offset = `$${params.length + 2}`;
@@ -184,8 +123,8 @@ export async function findBalls(options) {
       await client.query('SET LOCAL enable_seqscan = off');
     }
     const [{ rows: countRows }, { rows }] = await Promise.all([
-      client.query(`SELECT count(*)::int AS total FROM balls WHERE ${where}`, params),
-      client.query(
+      client.query<{ total: number }>(`SELECT count(*)::int AS total FROM balls WHERE ${where}`, params),
+      client.query<{ ball: Ball }>(
         `SELECT ${BALL_JSON} AS ball${relevance ? `, ${relevance} AS relevance` : ''}
          FROM balls WHERE ${where} ORDER BY ${orderBy} LIMIT ${limit} OFFSET ${offset}`,
         [...params, options.size, options.page * options.size],
@@ -194,20 +133,20 @@ export async function findBalls(options) {
     return pageOf(
       rows.map((r) => r.ball),
       options,
-      countRows[0].total,
+      countRows[0]?.total ?? 0,
     );
   });
 }
 
 /** All weight variants of a ball (heaviest first), including removed ones. */
-export async function findBallVariants(ballId, weight) {
-  const params = [ballId];
+export async function findBallVariants(ballId: string, weight?: number): Promise<Ball[]> {
+  const params: unknown[] = [ballId];
   let sql = `SELECT ${BALL_JSON} || jsonb_build_object('removed_at', removed_at) AS ball FROM balls WHERE ball_id = $1`;
   if (weight !== undefined) {
     params.push(weight);
     sql += ' AND weight = $2';
   }
-  const { rows } = await query(`${sql} ORDER BY weight DESC NULLS LAST, core_weight`, params);
+  const { rows } = await query<{ ball: Ball }>(`${sql} ORDER BY weight DESC NULLS LAST, core_weight`, params);
   return rows.map((r) => r.ball);
 }
 
@@ -221,8 +160,18 @@ const INT_DIFF_TOLERANCE = 0.005;
  * intermediate differential for asymmetric cores. Newest first.
  * Returns null if the reference ball doesn't exist.
  */
-export async function findSimilarBalls(ballId, weight, limit) {
-  const { rows: refs } = await query(
+interface ReferenceBall {
+  ball_id: string;
+  weight: string | null;
+  core_type: string | null;
+  coverstock_type: string | null;
+  core_rg: string | null;
+  core_diff: string | null;
+  core_int_diff: string | null;
+}
+
+export async function findSimilarBalls(ballId: string, weight: number | undefined, limit: number): Promise<Ball[] | null> {
+  const { rows: refs } = await query<ReferenceBall>(
     `SELECT ball_id, core_weight, weight, core_type, coverstock_type, core_rg, core_diff, core_int_diff
      FROM balls WHERE ball_id = $1 AND ($2::numeric IS NULL OR weight = $2)
      ORDER BY removed_at NULLS FIRST, weight DESC NULLS LAST LIMIT 1`,
@@ -235,14 +184,14 @@ export async function findSimilarBalls(ballId, weight, limit) {
   const asymmetric = ref.core_type === 'Asymmetric';
   if (asymmetric && ref.core_int_diff === null) return [];
 
-  const params = [ref.weight, ref.core_type, ref.coverstock_type, ref.core_rg, RG_TOLERANCE, ref.core_diff, DIFF_TOLERANCE, ref.ball_id, limit];
+  const params: unknown[] = [ref.weight, ref.core_type, ref.coverstock_type, ref.core_rg, RG_TOLERANCE, ref.core_diff, DIFF_TOLERANCE, ref.ball_id, limit];
   let intDiff = '';
   if (asymmetric) {
     params.push(ref.core_int_diff, INT_DIFF_TOLERANCE);
     intDiff = `AND core_int_diff BETWEEN $10::numeric - $11 AND $10::numeric + $11`;
   }
 
-  const { rows } = await query(
+  const { rows } = await query<{ ball: Ball }>(
     `SELECT ${BALL_JSON} AS ball FROM balls
      WHERE removed_at IS NULL
        AND weight = $1 AND core_type IS NOT DISTINCT FROM $2 AND coverstock_type IS NOT DISTINCT FROM $3
@@ -258,8 +207,8 @@ export async function findSimilarBalls(ballId, weight, limit) {
 }
 
 /** Every active ball (optionally one weight), newest first. */
-export async function exportBalls(weight) {
-  const { rows } = await query(
+export async function exportBalls(weight?: number): Promise<Ball[]> {
+  const { rows } = await query<{ ball: Ball }>(
     `SELECT ${BALL_JSON} AS ball FROM balls
      WHERE removed_at IS NULL AND ($1::numeric IS NULL OR weight = $1)
      ORDER BY release_date DESC NULLS LAST, lower(ball_name), ball_id, core_weight`,

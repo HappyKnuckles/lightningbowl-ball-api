@@ -1,13 +1,13 @@
 // GET /api/balls/{id}/similar[?weight=lbs][&limit=n] — similar reaction, newest first.
-import { withCors } from '../../../lib/cors.js';
 import { findSimilarBalls } from '../../../lib/balls.js';
-import { parseInteger, parseNumber, parseRequired } from '../../../lib/params.js';
+import { withCors } from '../../../lib/cors.js';
+import type { ApiRequest, ApiResponse } from '../../../lib/http.js';
 import { sendJson, withErrorHandling } from '../../../lib/respond.js';
+import { BallIdPath, parseQuery, SimilarQuery } from '../../../lib/schemas.js';
 
-async function handler(req, res) {
-  const id = parseRequired('id', req.query.id);
-  const weight = parseNumber('weight', req.query.weight, { min: 0, max: 20 });
-  const limit = parseInteger('limit', req.query.limit, { min: 1, max: 50 }) ?? 10;
+async function handler(req: ApiRequest, res: ApiResponse) {
+  const { id } = parseQuery(BallIdPath, req.query);
+  const { weight, limit } = parseQuery(SimilarQuery, req.query);
 
   const similar = await findSimilarBalls(id, weight, limit);
   if (similar === null) {
