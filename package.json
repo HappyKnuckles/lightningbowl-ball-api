@@ -4,7 +4,6 @@
   "description": "Ball catalog API for Lightning Bowl, mirrored nightly from bowwwl.com into Postgres",
   "scripts": {
     "dev": "tsx dev-server.ts",
-    "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "migrate": "tsx scripts/migrate.ts",
     "sync": "tsx scripts/sync.ts",
