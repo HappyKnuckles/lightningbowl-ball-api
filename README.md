@@ -17,7 +17,9 @@ Local development: copy `.env.example` to `.env.local`, then `npm install`, `npm
 
 ## How the sync works
 
-`lib/sync.js` first applies any pending migrations, then fetches brands, cores, coverstocks and the balls for each weight (`SYNC_WEIGHTS`, default 12–16 lb).\n\n- **Ball source:** the paged v2 endpoint (`/restapi/balls/v2`), because bowwwl's full-catalog endpoint (`/restapi/balls?_format=json`) is broken. v2 is read once per run and split by weight. A weight v2 doesn't contain falls back to the legacy per-weight endpoint; if that fails too, that weight is reported as an error, its existing rows are left alone and the run ends as `partial`. `stats.balls_<weight>.source` shows which source was used.
+`lib/sync.js` first applies any pending migrations, then fetches brands, cores, coverstocks and the balls for each weight (`SYNC_WEIGHTS`, default 12–16 lb).
+
+- **Ball source:** the paged v2 endpoint (`/restapi/balls/v2`), because bowwwl's full-catalog endpoint (`/restapi/balls?_format=json`) is broken. v2 is read once per run and split by weight. A weight v2 doesn't contain falls back to the legacy per-weight endpoint; if that fails too, that weight is reported as an error, its existing rows are left alone and the run ends as `partial`. `stats.balls_<weight>.source` shows which source was used.
 
 - **New balls** are inserted and keep their `first_seen_at`, which the API exposes and which `addedAfter` / `sort=first_seen_at` use.
 - **Changed balls** are updated. Unchanged rows aren't written at all.
