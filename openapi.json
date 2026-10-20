@@ -1,0 +1,1705 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Lightning Bowl Ball API",
+    "version": "1.0.0",
+    "license": {
+      "name": "ISC",
+      "identifier": "ISC"
+    },
+    "description": "Ball catalog for Lightning Bowl, mirrored nightly from bowwwl.com into Postgres. Search, filtering, sorting and paging run in the database.\n\nConventions: `page` is zero-based; `sort` is `field` or `field,asc|desc` and repeatable; list parameters repeat (`brand=Storm&brand=Hammer`). Errors are `{ \"error\": \"...\" }`."
+  },
+  "servers": [
+    {
+      "url": "/api"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Balls",
+      "description": "The ball catalog, one entry per ball and weight."
+    },
+    {
+      "name": "Catalog",
+      "description": "Brands, cores and coverstocks."
+    },
+    {
+      "name": "Operations",
+      "description": "Health and the nightly sync."
+    }
+  ],
+  "paths": {
+    "/balls": {
+      "get": {
+        "operationId": "searchBalls",
+        "summary": "Search, filter, sort and page balls",
+        "security": [],
+        "tags": [
+          "Balls"
+        ],
+        "description": "Default order: newest release first. With `search` and no `sort`: best match first. An explicit `sort` orders all matches.",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Fuzzy search over ball, brand, core and coverstock name and factory finish. Tolerates typos; separate several terms with commas. Without `sort`, results are ordered by relevance. Alias: `q`.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "weight",
+            "in": "query",
+            "required": false,
+            "description": "Ball weight in lbs.",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 20
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "description": "Ball name (exact, case-insensitive), e.g. to resolve names stored in games. Repeat the parameter for several values.",
+            "schema": {
+              "default": [],
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "brand",
+            "in": "query",
+            "required": false,
+            "description": "Brand name (exact, case-insensitive). Repeat the parameter for several values.",
+            "schema": {
+              "default": [],
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "core",
+            "in": "query",
+            "required": false,
+            "description": "Core name (exact, case-insensitive). Repeat the parameter for several values.",
+            "schema": {
+              "default": [],
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "coverstock",
+            "in": "query",
+            "required": false,
+            "description": "Coverstock name (exact, case-insensitive). Repeat the parameter for several values.",
+            "schema": {
+              "default": [],
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "coverstockType",
+            "in": "query",
+            "required": false,
+            "description": "Coverstock type, e.g. \"Solid Reactive\" (exact, case-insensitive). Repeat the parameter for several values.",
+            "schema": {
+              "default": [],
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "factoryFinish",
+            "in": "query",
+            "required": false,
+            "description": "Factory finish (exact, case-insensitive). Repeat the parameter for several values.",
+            "schema": {
+              "default": [],
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "Only these ball ids. Repeat the parameter for several values.",
+            "schema": {
+              "default": [],
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "excludeId",
+            "in": "query",
+            "required": false,
+            "description": "Leave out these ball ids. Repeat the parameter for several values.",
+            "schema": {
+              "default": [],
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "market",
+            "in": "query",
+            "required": false,
+            "description": "Market (case-insensitive).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "US",
+                "Overseas"
+              ]
+            }
+          },
+          {
+            "name": "coreType",
+            "in": "query",
+            "required": false,
+            "description": "Core type (case-insensitive).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Symmetric",
+                "Asymmetric"
+              ]
+            }
+          },
+          {
+            "name": "available",
+            "in": "query",
+            "required": false,
+            "description": "`true`: only available balls, `false`: only discontinued ones.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1",
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "releaseDate",
+            "in": "query",
+            "required": false,
+            "description": "Exact release date as the API returns it.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "releasedAfter",
+            "in": "query",
+            "required": false,
+            "description": "Released on or after this date (YYYY-MM-DD)",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "releasedBefore",
+            "in": "query",
+            "required": false,
+            "description": "Released on or before this date (YYYY-MM-DD)",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "addedAfter",
+            "in": "query",
+            "required": false,
+            "description": "First appeared in the catalog on or after this date (YYYY-MM-DD)",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "minRg",
+            "in": "query",
+            "required": false,
+            "description": "Minimum core RG.",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "maxRg",
+            "in": "query",
+            "required": false,
+            "description": "Maximum core RG.",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "minDiff",
+            "in": "query",
+            "required": false,
+            "description": "Minimum core differential.",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "maxDiff",
+            "in": "query",
+            "required": false,
+            "description": "Maximum core differential.",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "minIntDiff",
+            "in": "query",
+            "required": false,
+            "description": "Minimum intermediate differential.",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "maxIntDiff",
+            "in": "query",
+            "required": false,
+            "description": "Maximum intermediate differential.",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Sort order as `field` or `field,asc|desc`. Repeat for tie-breakers. Fields: ball_name, brand_name, release_date, first_seen_at, core_rg, core_diff, core_int_diff, core_type, coverstock_type, factory_finish, weight.",
+            "schema": {
+              "default": [],
+              "maxItems": 10,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^(ball_name|brand_name|release_date|first_seen_at|core_rg|core_diff|core_int_diff|core_type|coverstock_type|factory_finish|weight)(,(asc|desc|ASC|DESC))?$"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Zero-based page number.",
+            "schema": {
+              "default": 0,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "Page size (max 100).",
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of balls.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BallPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (100 requests per minute per IP).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/balls/export": {
+      "get": {
+        "operationId": "exportBalls",
+        "summary": "Whole catalog as an array",
+        "security": [],
+        "tags": [
+          "Balls"
+        ],
+        "description": "Every active ball (optionally one weight), newest first. Not paged.",
+        "parameters": [
+          {
+            "name": "weight",
+            "in": "query",
+            "required": false,
+            "description": "Ball weight in lbs.",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All balls.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Ball"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (100 requests per minute per IP).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/balls/{id}": {
+      "get": {
+        "operationId": "getBall",
+        "summary": "One ball in all its weights",
+        "security": [],
+        "tags": [
+          "Balls"
+        ],
+        "description": "Heaviest first. Includes balls removed upstream (with `removed_at` set).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "bowwwl ball id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50
+            }
+          },
+          {
+            "name": "weight",
+            "in": "query",
+            "required": false,
+            "description": "Ball weight in lbs.",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Weight variants.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Ball"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown ball.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (100 requests per minute per IP).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/balls/{id}/similar": {
+      "get": {
+        "operationId": "getSimilarBalls",
+        "summary": "Balls with a similar reaction",
+        "security": [],
+        "tags": [
+          "Balls"
+        ],
+        "description": "Same weight, core type and coverstock type; RG within 0.03, differential within 0.008, and for asymmetric cores intermediate differential within 0.005. Newest first.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "bowwwl ball id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50
+            }
+          },
+          {
+            "name": "weight",
+            "in": "query",
+            "required": false,
+            "description": "Ball weight in lbs.",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 20
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of results.",
+            "schema": {
+              "default": 10,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Similar balls (empty if the ball has no specs).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Ball"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown ball.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (100 requests per minute per IP).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/brands": {
+      "get": {
+        "operationId": "listBrands",
+        "summary": "Brands",
+        "security": [],
+        "tags": [
+          "Catalog"
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive substring match on the name (and brand). Alias: `q`.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Sort order as `field` or `field,asc|desc`. Repeat for tie-breakers. Fields: brand_name.",
+            "schema": {
+              "default": [],
+              "maxItems": 10,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^(brand_name)(,(asc|desc|ASC|DESC))?$"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Zero-based page number. When `page` or `size` is given, the response is a page instead of an array.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "Page size (max 100, default 20). When `page` or `size` is given, the response is a page instead of an array.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A plain array, or a page when `page` or `size` is given. Sorted by name (and brand).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Brand"
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/BrandPage"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (100 requests per minute per IP).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cores": {
+      "get": {
+        "operationId": "listCores",
+        "summary": "Cores",
+        "security": [],
+        "tags": [
+          "Catalog"
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive substring match on the name (and brand). Alias: `q`.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "brand",
+            "in": "query",
+            "required": false,
+            "description": "Brand (exact, case-insensitive). Repeat the parameter for several values.",
+            "schema": {
+              "default": [],
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Sort order as `field` or `field,asc|desc`. Repeat for tie-breakers. Fields: core_name, brand.",
+            "schema": {
+              "default": [],
+              "maxItems": 10,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^(core_name|brand)(,(asc|desc|ASC|DESC))?$"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Zero-based page number. When `page` or `size` is given, the response is a page instead of an array.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "Page size (max 100, default 20). When `page` or `size` is given, the response is a page instead of an array.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A plain array, or a page when `page` or `size` is given. Sorted by name (and brand).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Core"
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/CorePage"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (100 requests per minute per IP).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/coverstocks": {
+      "get": {
+        "operationId": "listCoverstocks",
+        "summary": "Coverstocks",
+        "security": [],
+        "tags": [
+          "Catalog"
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive substring match on the name (and brand). Alias: `q`.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "brand",
+            "in": "query",
+            "required": false,
+            "description": "Brand (exact, case-insensitive). Repeat the parameter for several values.",
+            "schema": {
+              "default": [],
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Sort order as `field` or `field,asc|desc`. Repeat for tie-breakers. Fields: coverstock_name, brand.",
+            "schema": {
+              "default": [],
+              "maxItems": 10,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^(coverstock_name|brand)(,(asc|desc|ASC|DESC))?$"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Zero-based page number. When `page` or `size` is given, the response is a page instead of an array.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "Page size (max 100, default 20). When `page` or `size` is given, the response is a page instead of an array.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A plain array, or a page when `page` or `size` is given. Sorted by name (and brand).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Coverstock"
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/CoverstockPage"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (100 requests per minute per IP).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Catalog size and last sync",
+        "security": [],
+        "tags": [
+          "Operations"
+        ],
+        "responses": {
+          "200": {
+            "description": "Status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (100 requests per minute per IP).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database not set up yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotInitialized"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cron/sync": {
+      "get": {
+        "operationId": "runSync",
+        "summary": "Run the catalog sync",
+        "security": [
+          {
+            "cronSecret": []
+          }
+        ],
+        "tags": [
+          "Operations"
+        ],
+        "description": "Called nightly by Vercel Cron. Applies pending migrations, then imports from bowwwl.com.",
+        "responses": {
+          "200": {
+            "description": "Finished run (`success` or `partial`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncRun"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong secret.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Another run is in progress.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncSkipped"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Every part of the run failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncRun"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Ball": {
+        "type": "object",
+        "properties": {
+          "ball_id": {
+            "type": "string"
+          },
+          "ball_name": {
+            "type": "string"
+          },
+          "core_weight": {
+            "type": "string",
+            "description": "Weight in lbs, e.g. \"15\". A ball exists once per weight."
+          },
+          "availability": {
+            "description": "\"Available\" or a discontinued state.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ball_image": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "brand_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "brand_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "core_diff": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "core_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "core_image": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "core_int_diff": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "core_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "core_rg": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "core_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coverstock_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coverstock_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coverstock_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "factory_finish": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_update": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "release_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thumbnail_image": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "us_int": {
+            "description": "\"US\" or \"Overseas\".",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "first_seen_at": {
+            "type": "string",
+            "description": "When this ball first appeared in the catalog (ISO timestamp)."
+          },
+          "removed_at": {
+            "description": "Only on `GET /balls/{id}`: when the ball disappeared upstream, or null.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ball_id",
+          "ball_name",
+          "core_weight",
+          "availability",
+          "ball_image",
+          "brand_id",
+          "brand_name",
+          "core_diff",
+          "core_id",
+          "core_image",
+          "core_int_diff",
+          "core_name",
+          "core_rg",
+          "core_type",
+          "coverstock_id",
+          "coverstock_name",
+          "coverstock_type",
+          "factory_finish",
+          "last_update",
+          "release_date",
+          "thumbnail_image",
+          "us_int",
+          "first_seen_at"
+        ],
+        "additionalProperties": {},
+        "description": "A ball in one weight, as bowwwl.com describes it, plus catalog metadata."
+      },
+      "BallPage": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Ball"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        },
+        "required": [
+          "content",
+          "page"
+        ],
+        "additionalProperties": false,
+        "description": "One page of balls (Spring `PagedModel` shape)."
+      },
+      "PageMeta": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "size": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "totalElements": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "totalPages": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "number",
+          "size",
+          "totalElements",
+          "totalPages"
+        ],
+        "additionalProperties": false
+      },
+      "Brand": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "brand_name": {
+            "type": "string"
+          },
+          "logo": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "brand_name"
+        ],
+        "additionalProperties": {}
+      },
+      "BrandPage": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Brand"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        },
+        "required": [
+          "content",
+          "page"
+        ],
+        "additionalProperties": false
+      },
+      "Core": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "core_name": {
+            "type": "string"
+          },
+          "brand": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "api_filter_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "core_name",
+          "brand"
+        ],
+        "additionalProperties": {}
+      },
+      "CorePage": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Core"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        },
+        "required": [
+          "content",
+          "page"
+        ],
+        "additionalProperties": false
+      },
+      "Coverstock": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "coverstock_name": {
+            "type": "string"
+          },
+          "brand": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "api_filter_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "coverstock_name",
+          "brand"
+        ],
+        "additionalProperties": {}
+      },
+      "CoverstockPage": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Coverstock"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        },
+        "required": [
+          "content",
+          "page"
+        ],
+        "additionalProperties": false
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "empty"
+            ],
+            "description": "`empty`: tables exist but no sync has run yet."
+          },
+          "counts": {
+            "type": "object",
+            "properties": {
+              "balls": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "brands": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "cores": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "coverstocks": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "balls",
+              "brands",
+              "cores",
+              "coverstocks"
+            ],
+            "additionalProperties": false
+          },
+          "lastSync": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "counts",
+          "lastSync"
+        ],
+        "additionalProperties": false
+      },
+      "NotInitialized": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "not_initialized"
+          },
+          "hint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "hint"
+        ],
+        "additionalProperties": false,
+        "description": "The database has no tables yet; run the sync once."
+      },
+      "SyncRun": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Run id (bigint as string)."
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "success",
+              "partial",
+              "failed"
+            ]
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "stats": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "Per part (table or weight): fetched, inserted, updated, removed, source."
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "started_at",
+          "finished_at",
+          "status",
+          "trigger",
+          "stats",
+          "errors"
+        ],
+        "additionalProperties": false
+      },
+      "SyncSkipped": {
+        "type": "object",
+        "properties": {
+          "skipped": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "skipped"
+        ],
+        "additionalProperties": false,
+        "description": "Another sync was still running."
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "cronSecret": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "`CRON_SECRET`"
+      }
+    }
+  }
+}

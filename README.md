@@ -2,7 +2,8 @@
 
 Ball catalog API for [Lightning Bowl](https://github.com/HappyKnuckles/lightningbowl). The bowwwl.com catalog is mirrored into Postgres (Neon) every night. Search, filtering, sorting and paging all run in the database with indexes.
 
-- **Runtime:** Node 20+ serverless functions on Vercel
+- **Runtime:** TypeScript (strict) on Node 20+ serverless functions on Vercel
+- **Contract:** Zod schemas in `lib/schemas.ts` validate every request and generate the TypeScript types and the OpenAPI document
 - **Database:** Postgres 16+ with `pg_trgm` (Neon)
 - **Sync:** Vercel Cron, daily at 01:17 UTC (03:17 Berlin in summer, 02:17 in winter)
 
@@ -13,7 +14,7 @@ Ball catalog API for [Lightning Bowl](https://github.com/HappyKnuckles/lightning
 3. **Run the first sync:** Vercel → project → **Settings → Cron Jobs** → **Run** next to `/api/cron/sync`. It creates the tables and imports the catalog; takes a minute or two. After that it runs nightly on its own.
 4. **Check** `GET /api/health`: `counts.balls` should be in the thousands and `lastSync.status` `success` (or `partial`, see below).
 
-Local development: copy `.env.example` to `.env.local`, then `npm install`, `npm run sync` (also migrates) and `npm run dev` (http://localhost:3003). `npm test` runs against a throwaway embedded Postgres and needs no database.
+Local development: copy `.env.example` to `.env.local`, then `npm install`, `npm run sync` (also migrates) and `npm run dev` (http://localhost:3003, docs at `/api/docs`). `npm test` runs against a throwaway embedded Postgres and needs no database; `npm run typecheck` runs `tsc`.
 
 ## How the sync works
 
@@ -28,6 +29,25 @@ Local development: copy `.env.example` to `.env.local`, then `npm install`, `npm
 - **Runs are logged** in `sync_runs`. Overlapping runs are skipped, and runs that never finished are closed out after 30 minutes. `GET /api/health` shows the latest run.
 
 Every row keeps the untouched upstream object in `raw`, and the API returns that object, so clients get exactly the shape they know from bowwwl.com. The typed columns next to it are what queries run on.
+
+## Docs and types
+
+- **Swagger UI:** `GET /api/docs`
+- **OpenAPI 3.1 document:** `GET /api/openapi.json` (readable from any origin), also committed as [`openapi.json`](openapi.json)
+
+Everything comes from `lib/schemas.ts`: the handlers validate requests with those schemas, the TypeScript types are inferred from them, and `lib/openapi.ts` generates the document. A contract test checks every endpoint's real response against its documented schema, and another fails if the committed `openapi.json` is stale. Run `npm run openapi` after changing a schema.
+
+Clients can generate types from the document, for example the Angular app:
+
+```bash
+npx openapi-typescript https://balls.lightningbowl.de/api/openapi.json -o src/app/core/models/ball-api.d.ts
+```
+
+```ts
+import type { components } from './ball-api';
+type Ball = components['schemas']['Ball'];
+type BallPage = components['schemas']['BallPage'];
+```
 
 ## API
 
@@ -53,7 +73,7 @@ Paged response:
 | --- | --- |
 | `search` (alias `q`) | Fuzzy search over ball, brand, core and coverstock name and factory finish. Tolerates typos; separate several terms with commas. Without `sort`, results are ordered by relevance. |
 | `weight` | Ball weight in lbs. |
-| `brand`, `core`, `coverstock`, `coverstockType`, `factoryFinish` | Exact match, case-insensitive, repeatable. |
+| `name`, `brand`, `core`, `coverstock`, `coverstockType`, `factoryFinish` | Exact match, case-insensitive, repeatable. `name` resolves ball names stored elsewhere (e.g. in games). |
 | `market` | `US` or `Overseas`. |
 | `coreType` | `Symmetric` or `Asymmetric`. |
 | `available` | `true` = available only, `false` = discontinued only. |
