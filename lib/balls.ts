@@ -1,6 +1,7 @@
 // Ball queries: filtering, fuzzy search, sorting and paging run in Postgres.
 
 import { query, withTransaction } from './db.js';
+import { UPSTREAM_BASE } from './upstream.js';
 import { escapeLike, pageOf, SqlParams } from './params.js';
 import { type Ball, type BallPage, type BallQuery, type BallSortField, sortOrders } from './schemas.js';
 
@@ -36,9 +37,15 @@ const SEARCH_COLUMNS: [column: string, weight: number][] = [
   ['factory_finish', 0.5],
 ];
 
-/** An image field: our copy (003_ball_images.sql) once there is one, bowwwl.com's path until then. */
-const imageSql = (field: string) =>
-  `coalesce((SELECT url FROM ball_images WHERE source = balls.raw->>'${field}'), nullif(balls.raw->>'${field}', ''))`;
+/** Origin that bowwwl.com's relative image paths resolve against. */
+const IMAGE_ORIGIN = new URL(UPSTREAM_BASE).origin;
+
+/** An upstream image field as an absolute URL; null when missing or unusable. */
+const imageUrl = (field: string) =>
+  `CASE WHEN raw->>'${field}' ~* '^https?://' THEN raw->>'${field}' WHEN raw->>'${field}' LIKE '/%' THEN '${IMAGE_ORIGIN}' || (raw->>'${field}') END`;
+
+/** An image field: our copy (003_ball_images.sql) once there is one, bowwwl.com's absolute URL until then. */
+const imageSql = (field: string) => `coalesce((SELECT url FROM ball_images WHERE source = balls.raw->>'${field}'), ${imageUrl(field)})`;
 
 /** What the API returns per ball (the `Ball` schema), built from the typed columns. */
 const BALL_JSON = `jsonb_build_object(

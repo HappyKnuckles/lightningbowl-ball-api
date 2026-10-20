@@ -90,10 +90,28 @@ test('copies each image once, newest balls first, and the API returns the copies
   assert.equal(puts.length, 4);
 });
 
-test('keeps returning the bowwwl.com path until an image is copied', async () => {
+test("keeps returning bowwwl.com's URL until an image is copied", async () => {
   await syncBalls();
   const res = await call(ballsHandler, { weight: '15', id: '1' });
-  assert.equal(res.body.content[0].ball_image, '/img/1.png');
+  assert.equal(res.body.content[0].ball_image, 'https://bowwwl.com/img/1.png');
+});
+
+test('only copies what the API can turn into a URL', async () => {
+  await runSync({
+    weights: [15],
+    fetchFn: fakeUpstream({ 15: [upstreamBall({ ball_id: '9', ball_image: 'n/a', thumbnail_image: '/img/9.png' })] }).fetchFn,
+    log: () => {},
+    imageStore: null,
+  });
+
+  const stats = await mirrorImages({ store: fakeStore().store, fetchFn: fakeImages().fetchFn });
+
+  assert.equal(stats.copied, 1);
+  const { rows } = await query<{ source: string }>('SELECT source FROM ball_images');
+  assert.deepEqual(
+    rows.map((row) => row.source),
+    ['/img/9.png'],
+  );
 });
 
 test('retries failed images on a later day, three times at most', async () => {

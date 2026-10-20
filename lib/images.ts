@@ -8,9 +8,10 @@
 import { createHash } from 'node:crypto';
 import { query } from './db.js';
 import type { ImageStore } from './r2.js';
+import { UPSTREAM_BASE } from './upstream.js';
 
-/** Where bowwwl.com's relative image paths live. */
-export const IMAGE_BASE = (process.env.BOWWWL_IMAGE_BASE || 'https://bowwwl.com').replace(/\/+$/, '');
+/** Origin that bowwwl.com's relative image paths resolve against (as in the API responses). */
+export const IMAGE_BASE = new URL(UPSTREAM_BASE).origin;
 
 const IMAGE_FIELDS = ['ball_image', 'core_image', 'thumbnail_image'] as const;
 const MAX_ATTEMPTS = 3;
@@ -68,7 +69,8 @@ async function registerSources(): Promise<void> {
        FROM balls, unnest($1::text[]) AS field
        WHERE removed_at IS NULL
      ) images
-     WHERE source IS NOT NULL
+     -- only what the API turns into a URL: absolute URLs and site paths
+     WHERE source ~* '^https?://' OR source LIKE '/%'
      GROUP BY source
      ON CONFLICT (source) DO NOTHING`,
     [IMAGE_FIELDS],

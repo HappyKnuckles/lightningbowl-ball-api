@@ -47,6 +47,9 @@ test('returns typed balls: numeric specs, ISO dates, no upstream extras', async 
   assert.match(ball.release_date, /^\d{4}-\d{2}-\d{2}$/);
   assert.ok(ball.first_seen_at);
   assert.equal('raw' in ball, false);
+  // Relative upstream image paths become absolute; empty ones null.
+  assert.equal(ball.ball_image, 'https://bowwwl.com/img/1.png');
+  assert.equal(ball.thumbnail_image, null);
 
   const unknownSpec = (await call(ballsHandler, { id: '4' })).body.content[0];
   assert.equal(unknownSpec.core_rg, null); // upstream 'n/a'

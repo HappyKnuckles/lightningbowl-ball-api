@@ -1312,21 +1312,21 @@
             "description": "Release date (YYYY-MM-DD), null if unknown."
           },
           "ball_image": {
-            "description": "Image on images.lightningbowl.de once it is copied there; until then the image path or URL as bowwwl.com gives it.",
+            "description": "Absolute image URL, null if bowwwl.com has none: on images.lightningbowl.de once the image is copied there, on bowwwl.com until then.",
             "type": [
               "string",
               "null"
             ]
           },
           "core_image": {
-            "description": "Image on images.lightningbowl.de once it is copied there; until then the image path or URL as bowwwl.com gives it.",
+            "description": "Absolute image URL, null if bowwwl.com has none: on images.lightningbowl.de once the image is copied there, on bowwwl.com until then.",
             "type": [
               "string",
               "null"
             ]
           },
           "thumbnail_image": {
-            "description": "Image on images.lightningbowl.de once it is copied there; until then the image path or URL as bowwwl.com gives it.",
+            "description": "Absolute image URL, null if bowwwl.com has none: on images.lightningbowl.de once the image is copied there, on bowwwl.com until then.",
             "type": [
               "string",
               "null"
@@ -1449,7 +1449,7 @@
             "type": "string"
           },
           "logo": {
-            "description": "Logo URL.",
+            "description": "Absolute logo URL, null if there is none.",
             "type": [
               "string",
               "null"
