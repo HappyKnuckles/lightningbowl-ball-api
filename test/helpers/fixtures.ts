@@ -1,5 +1,9 @@
 // Upstream-shaped data (everything is a string, like bowwwl.com sends it).
-export function upstreamBall(overrides = {}) {
+import type { FetchFn } from '../../lib/upstream.js';
+
+export type UpstreamBall = Record<string, string>;
+
+export function upstreamBall(overrides: Record<string, string> = {}): UpstreamBall {
   return {
     availability: 'Available',
     ball_id: '1',
@@ -70,25 +74,28 @@ export const COVERSTOCKS = [
  * Fake fetch serving the fixtures. `data` can be overridden per test; a value
  * that is an Error makes that URL fail.
  */
-export function fakeUpstream(data = {}) {
-  const routes = { brands: BRANDS, cores: CORES, coverstocks: COVERSTOCKS, 15: BALLS_15, 14: BALLS_14, ...data };
-  const calls = [];
-  const fetchFn = async (url) => {
+type Route = unknown[] | Error;
+
+export function fakeUpstream(data: Record<string, Route> = {}): { fetchFn: FetchFn; calls: string[] } {
+  const routes: Record<string, Route> = { brands: BRANDS, cores: CORES, coverstocks: COVERSTOCKS, 15: BALLS_15, 14: BALLS_14, ...data };
+  const calls: string[] = [];
+  const fetchFn: FetchFn = async (url) => {
     calls.push(url);
     const { pathname, searchParams } = new URL(url);
-    let body;
+    let body: Route;
     if (pathname.endsWith('/balls/v2')) {
       // `v2` is an array of pages (real paging) or one list returned for every
       // page (bowwwl ignoring `page`); absent means v2 has nothing.
       const v2 = routes.v2 ?? [];
       const page = Number(searchParams.get('page'));
-      body = v2 instanceof Error ? v2 : Array.isArray(v2[0]) ? (v2[page] ?? []) : v2;
+      body = v2 instanceof Error ? v2 : Array.isArray(v2[0]) ? ((v2[page] as unknown[] | undefined) ?? []) : v2;
     } else {
-      const key = searchParams.get('weight') ?? pathname.split('/').pop();
+      const key = searchParams.get('weight') ?? pathname.split('/').pop() ?? '';
       body = routes[key] ?? [];
     }
     if (body instanceof Error) throw body;
-    return { ok: true, status: 200, json: async () => body };
+    const payload = body;
+    return { ok: true, status: 200, json: async () => payload };
   };
   return { fetchFn, calls };
 }

@@ -11,13 +11,17 @@ import brands from './api/brands.js';
 import cores from './api/cores.js';
 import coverstocks from './api/coverstocks.js';
 import sync from './api/cron/sync.js';
+import docs from './api/docs.js';
 import health from './api/health.js';
+import openapi from './api/openapi.js';
+import type { ApiRequest, ApiResponse, Handler } from './lib/http.js';
+import type { RawQuery } from './lib/schemas.js';
 
 if (existsSync('.env.local')) process.loadEnvFile('.env.local');
 
 const PORT = Number(process.env.PORT || 3003);
 
-const routes = [
+const routes: [RegExp, Handler][] = [
   [/^\/api\/balls$/, balls],
   [/^\/api\/balls\/export$/, exportBalls],
   [/^\/api\/balls\/(?<id>[^/]+)$/, ball],
@@ -27,51 +31,65 @@ const routes = [
   [/^\/api\/coverstocks$/, coverstocks],
   [/^\/api\/health$/, health],
   [/^\/api\/cron\/sync$/, sync],
+  [/^\/api\/openapi(\.json)?$/, openapi],
+  [/^\/api\/docs$/, docs],
 ];
 
-function addResponseHelpers(res) {
-  res.status = (code) => {
-    res.statusCode = code;
-    return res;
+function toApiResponse(res: http.ServerResponse): ApiResponse {
+  const api: ApiResponse = {
+    status(code) {
+      res.statusCode = code;
+      return api;
+    },
+    json(body) {
+      if (!res.getHeader('Content-Type')) res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify(body));
+    },
+    setHeader: (name, value) => res.setHeader(name, value),
+    end: (body) => res.end(body),
+    get headersSent() {
+      return res.headersSent;
+    },
   };
-  res.json = (payload) => {
-    if (!res.getHeader('Content-Type')) res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.end(JSON.stringify(payload));
-  };
+  return api;
 }
 
-function queryObject(searchParams) {
-  const query = {};
+function queryObject(searchParams: URLSearchParams): RawQuery {
+  const query: RawQuery = {};
   for (const [key, value] of searchParams) {
-    if (query[key] === undefined) query[key] = value;
-    else if (Array.isArray(query[key])) query[key].push(value);
-    else query[key] = [query[key], value];
+    const existing = query[key];
+    if (existing === undefined) query[key] = value;
+    else if (Array.isArray(existing)) existing.push(value);
+    else query[key] = [existing, value];
   }
   return query;
 }
 
 http
   .createServer(async (req, res) => {
-    addResponseHelpers(res);
+    const api = toApiResponse(res);
     const url = new URL(req.url || '/', 'http://localhost');
     const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/$/, '') : url.pathname;
 
     for (const [pattern, handler] of routes) {
       const match = pattern.exec(pathname);
-      if (match) {
-        req.query = {
-          ...queryObject(url.searchParams),
-          ...Object.fromEntries(Object.entries(match.groups ?? {}).map(([k, v]) => [k, decodeURIComponent(v)])),
-        };
-        try {
-          await handler(req, res);
-        } catch (error) {
-          console.error(error);
-          if (!res.headersSent) res.status(500).json({ error: 'Internal server error' });
-        }
-        return;
+      if (!match) continue;
+      const params = Object.fromEntries(Object.entries(match.groups ?? {}).map(([k, v]) => [k, decodeURIComponent(v)]));
+      const apiReq: ApiRequest = {
+        method: req.method,
+        url: req.url,
+        headers: req.headers,
+        socket: req.socket,
+        query: { ...queryObject(url.searchParams), ...params },
+      };
+      try {
+        await handler(apiReq, api);
+      } catch (error) {
+        console.error(error);
+        if (!res.headersSent) api.status(500).json({ error: 'Internal server error' });
       }
+      return;
     }
-    res.status(404).json({ error: 'Not found' });
+    api.status(404).json({ error: 'Not found' });
   })
-  .listen(PORT, () => console.log(`Ball API running at http://localhost:${PORT}`));
+  .listen(PORT, () => console.log(`Ball API running at http://localhost:${PORT} (docs: /api/docs)`));

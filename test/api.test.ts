@@ -8,12 +8,12 @@ import brandsHandler from '../api/brands.js';
 import coresHandler from '../api/cores.js';
 import cronHandler from '../api/cron/sync.js';
 import healthHandler from '../api/health.js';
-import { runSync } from '../lib/sync.js';
+import { runSync, type SyncOptions } from '../lib/sync.js';
 import { BALLS_15, fakeUpstream, upstreamBall } from './helpers/fixtures.js';
 import { startDatabase } from './helpers/db.js';
-import { call } from './helpers/http.js';
+import { call, type TestResponse } from './helpers/http.js';
 
-let stop;
+let stop: () => Promise<void>;
 before(async () => {
   stop = await startDatabase();
   const extra = [
@@ -25,14 +25,15 @@ before(async () => {
 });
 after(() => stop());
 
-const ids = (res) => res.body.content.map((b) => `${b.ball_id}-${b.core_weight}`);
+type BallLike = { ball_id: string; core_weight: string };
+const ids = (res: TestResponse): string[] => res.body.content.map((b: BallLike) => `${b.ball_id}-${b.core_weight}`);
 
 test('lists balls newest first in a Spring-style page with cache headers', async () => {
   const res = await call(ballsHandler, { weight: '15', size: '3' });
   assert.equal(res.statusCode, 200);
   assert.deepEqual(ids(res), ['7-15', '6-15', '2-15']);
   assert.deepEqual(res.body.page, { number: 0, size: 3, totalElements: 7, totalPages: 3 });
-  assert.match(res.headers['cache-control'], /s-maxage=/);
+  assert.match(res.headers['cache-control'] ?? '', /s-maxage=/);
   assert.equal(res.headers.vary, 'Origin');
 });
 
@@ -96,7 +97,7 @@ test('search combines with filters and explicit sort', async () => {
 test('GET /api/balls/{id} returns all variants heaviest first, or 404', async () => {
   const res = await call(ballHandler, { id: '1' });
   assert.deepEqual(
-    res.body.map((b) => b.core_weight),
+    res.body.map((b: Record<string, string>) => b.core_weight),
     ['15', '14'],
   );
   assert.equal((await call(ballHandler, { id: '1', weight: '14' })).body.length, 1);
@@ -107,7 +108,7 @@ test('GET /api/balls/{id}/similar finds same-weight balls within tolerance', asy
   const res = await call(similarHandler, { id: '1', weight: '15' });
   // ball 1: rg 2.48 / diff 0.051 → 2 (2.49/0.052) and 6 (2.50/0.055) qualify; 7 is too far, 8 has another coverstock
   assert.deepEqual(
-    res.body.map((b) => b.ball_id),
+    res.body.map((b: Record<string, string>) => b.ball_id),
     ['6', '2'],
   );
   assert.equal((await call(similarHandler, { id: '1', weight: '15', limit: '1' })).body.length, 1);
@@ -118,17 +119,17 @@ test('GET /api/balls/{id}/similar finds same-weight balls within tolerance', asy
 test('catalog lists stay plain arrays and page on request', async () => {
   const brands = await call(brandsHandler);
   assert.deepEqual(
-    brands.body.map((b) => b.brand_name),
+    brands.body.map((b: Record<string, string>) => b.brand_name),
     ['Hammer', 'Motiv', 'Storm'],
   );
   const cores = await call(coresHandler, { brand: 'storm', size: '5' });
   assert.deepEqual(
-    cores.body.content.map((c) => c.core_name),
+    cores.body.content.map((c: Record<string, string>) => c.core_name),
     ['Velocity'],
   );
   assert.equal(cores.body.page.totalElements, 1);
   assert.deepEqual(
-    (await call(coresHandler, { search: 'gas' })).body.map((c) => c.core_name),
+    (await call(coresHandler, { search: 'gas' })).body.map((c: Record<string, string>) => c.core_name),
     ['Gas Mask'],
   );
 });
@@ -153,7 +154,7 @@ test('GET /api/balls/export returns the whole catalog newest first', async () =>
   assert.equal(all.body.length, 8);
   const fifteen = await call(exportHandler, { weight: '15' });
   assert.deepEqual(
-    fifteen.body.map((b) => b.ball_id),
+    fifteen.body.map((b: Record<string, string>) => b.ball_id),
     ['7', '6', '2', '3', '4', '1', '8'],
   );
   assert.equal((await call(exportHandler, { weight: 'heavy' })).statusCode, 400);

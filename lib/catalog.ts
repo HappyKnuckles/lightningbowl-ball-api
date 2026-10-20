@@ -47,7 +47,8 @@ export async function findCatalog(table: CatalogTable, raw: RawQuery) {
 
   const sort = sortOrders(q.sort);
   const orderBy =
-    (sort.length > 0 ? sort.map((s) => `${config.sortSql[s.field]} ${s.direction.toUpperCase()} NULLS LAST`).join(', ') : config.defaultOrder) + ', id';
+    (sort.length > 0 ? sort.map((s) => `${config.sortSql[s.field]} ${s.direction.toUpperCase()} NULLS LAST`).join(', ') : config.defaultOrder) +
+    ', id';
   const whereSql = where.join(' AND ');
 
   if (!paging) {

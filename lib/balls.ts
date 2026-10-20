@@ -93,7 +93,7 @@ export function buildBallSql(o: BallQuery) {
       scores.push(`GREATEST(${SEARCH_COLUMNS.map(([col, w]) => `${w} * word_similarity(${t}, lower(coalesce(${col}, '')))`).join(', ')})`);
     }
     where.push(`(${matches.join(' OR ')})`);
-    relevance = scores.length === 1 ? scores[0]! : `GREATEST(${scores.join(", ")})`;
+    relevance = scores.length === 1 ? scores[0]! : `GREATEST(${scores.join(', ')})`;
   }
 
   // With a search and no explicit sort, best matches come first.
@@ -184,7 +184,17 @@ export async function findSimilarBalls(ballId: string, weight: number | undefine
   const asymmetric = ref.core_type === 'Asymmetric';
   if (asymmetric && ref.core_int_diff === null) return [];
 
-  const params: unknown[] = [ref.weight, ref.core_type, ref.coverstock_type, ref.core_rg, RG_TOLERANCE, ref.core_diff, DIFF_TOLERANCE, ref.ball_id, limit];
+  const params: unknown[] = [
+    ref.weight,
+    ref.core_type,
+    ref.coverstock_type,
+    ref.core_rg,
+    RG_TOLERANCE,
+    ref.core_diff,
+    DIFF_TOLERANCE,
+    ref.ball_id,
+    limit,
+  ];
   let intDiff = '';
   if (asymmetric) {
     params.push(ref.core_int_diff, INT_DIFF_TOLERANCE);

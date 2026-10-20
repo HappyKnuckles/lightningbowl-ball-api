@@ -11,7 +11,7 @@ const LOCK_ID = 727274; // arbitrary, unique to this app
 
 const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
 
-export async function migrate({ log = console.log } = {}) {
+export async function migrate({ log = console.log }: { log?: (message: string) => void } = {}): Promise<string[]> {
   await query(`CREATE TABLE IF NOT EXISTS schema_migrations (
     name text PRIMARY KEY,
     applied_at timestamptz NOT NULL DEFAULT now()
@@ -26,7 +26,7 @@ export async function migrate({ log = console.log } = {}) {
     const applied = await withTransaction(async (client) => {
       await client.query('SELECT pg_advisory_xact_lock($1)', [LOCK_ID]);
       const { rowCount } = await client.query('SELECT 1 FROM schema_migrations WHERE name = $1', [file]);
-      if (rowCount > 0) return false; // applied meanwhile by a concurrent caller
+      if ((rowCount ?? 0) > 0) return false; // applied meanwhile by a concurrent caller
       await client.query(sql);
       await client.query('INSERT INTO schema_migrations (name) VALUES ($1)', [file]);
       return true;

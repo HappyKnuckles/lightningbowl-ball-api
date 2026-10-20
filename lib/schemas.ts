@@ -19,7 +19,11 @@ const MAX_LIST_ITEMS = 100;
 const text = (description: string) => z.string().max(MAX_TEXT).optional().meta({ description });
 
 const list = (description: string) =>
-  z.array(z.string().max(MAX_TEXT)).max(MAX_LIST_ITEMS).default([]).meta({ description: `${description} Repeat the parameter for several values.` });
+  z
+    .array(z.string().max(MAX_TEXT))
+    .max(MAX_LIST_ITEMS)
+    .default([])
+    .meta({ description: `${description} Repeat the parameter for several values.` });
 
 const number = (description: string, range: { min?: number; max?: number } = {}) => {
   let schema = z.coerce.number();
@@ -28,7 +32,11 @@ const number = (description: string, range: { min?: number; max?: number } = {})
   return schema.optional().meta({ description });
 };
 
-const date = (description: string) => z.iso.date().optional().meta({ description: `${description} (YYYY-MM-DD)` });
+const date = (description: string) =>
+  z.iso
+    .date()
+    .optional()
+    .meta({ description: `${description} (YYYY-MM-DD)` });
 
 const boolean = (description: string) =>
   z
@@ -51,7 +59,13 @@ export function sortParam<const F extends readonly string[]>(fields: F) {
 
 export const pagingParams = {
   page: z.coerce.number().int().min(0).max(100_000).default(0).meta({ description: 'Zero-based page number.' }),
-  size: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE).meta({ description: `Page size (max ${MAX_PAGE_SIZE}).` }),
+  size: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_PAGE_SIZE)
+    .default(DEFAULT_PAGE_SIZE)
+    .meta({ description: `Page size (max ${MAX_PAGE_SIZE}).` }),
 };
 
 // ---------------------------------------------------------------- ball query
@@ -150,7 +164,9 @@ const catalogQuery = <const F extends readonly string[]>(sortFields: F, withBran
       .min(1)
       .max(MAX_PAGE_SIZE)
       .optional()
-      .meta({ description: `Page size (max ${MAX_PAGE_SIZE}, default ${DEFAULT_PAGE_SIZE}). When \`page\` or \`size\` is given, the response is a page instead of an array.` }),
+      .meta({
+        description: `Page size (max ${MAX_PAGE_SIZE}, default ${DEFAULT_PAGE_SIZE}). When \`page\` or \`size\` is given, the response is a page instead of an array.`,
+      }),
   });
 
 export const BrandQuery = catalogQuery(['brand_name'] as const, false);
@@ -191,11 +207,7 @@ export const Ball = z
     thumbnail_image: upstreamText,
     us_int: upstreamText.meta({ description: '"US" or "Overseas".' }),
     first_seen_at: z.string().meta({ description: 'When this ball first appeared in the catalog (ISO timestamp).' }),
-    removed_at: z
-      .string()
-      .nullable()
-      .optional()
-      .meta({ description: 'Only on `GET /balls/{id}`: when the ball disappeared upstream, or null.' }),
+    removed_at: z.string().nullable().optional().meta({ description: 'Only on `GET /balls/{id}`: when the ball disappeared upstream, or null.' }),
   })
   .meta({ id: 'Ball', description: 'A ball in one weight, as bowwwl.com describes it, plus catalog metadata.' });
 
@@ -210,12 +222,16 @@ export const PageMeta = z
   })
   .meta({ id: 'PageMeta' });
 
-export const BallPage = z.object({ content: z.array(Ball), page: PageMeta }).meta({ id: 'BallPage', description: 'One page of balls (Spring `PagedModel` shape).' });
+export const BallPage = z
+  .object({ content: z.array(Ball), page: PageMeta })
+  .meta({ id: 'BallPage', description: 'One page of balls (Spring `PagedModel` shape).' });
 
 export type BallPage = z.infer<typeof BallPage>;
 
 export const Brand = z.looseObject({ id: z.string(), brand_name: z.string(), logo: upstreamText.optional() }).meta({ id: 'Brand' });
-export const Core = z.looseObject({ id: z.string(), core_name: z.string(), brand: upstreamText, api_filter_url: upstreamText.optional() }).meta({ id: 'Core' });
+export const Core = z
+  .looseObject({ id: z.string(), core_name: z.string(), brand: upstreamText, api_filter_url: upstreamText.optional() })
+  .meta({ id: 'Core' });
 export const Coverstock = z
   .looseObject({ id: z.string(), coverstock_name: z.string(), brand: upstreamText, api_filter_url: upstreamText.optional() })
   .meta({ id: 'Coverstock' });

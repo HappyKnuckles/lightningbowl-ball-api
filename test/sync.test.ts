@@ -2,19 +2,22 @@ import { after, before, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { query } from '../lib/db.js';
 import { migrate } from '../lib/migrate.js';
-import { runSync } from '../lib/sync.js';
+import { runSync, type SyncOptions } from '../lib/sync.js';
 import { BALLS_15, fakeUpstream, upstreamBall } from './helpers/fixtures.js';
 import { resetDatabase, startDatabase } from './helpers/db.js';
 
-let stop;
+let stop: () => Promise<void>;
 before(async () => {
   stop = await startDatabase();
 });
 after(() => stop());
 beforeEach(() => resetDatabase());
 
-const sync = (data, extra = {}) => runSync({ weights: [14, 15], fetchFn: fakeUpstream(data).fetchFn, retryBackoffMs: 1, log: () => {}, ...extra });
-const count = async (sql) => (await query(sql)).rows[0].n;
+// Tests read the run's stats freely; the shape is covered by the SyncRun schema.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sync = (data: Parameters<typeof fakeUpstream>[0] = {}, extra: SyncOptions = {}): Promise<any> =>
+  runSync({ weights: [14, 15], fetchFn: fakeUpstream(data).fetchFn, retryBackoffMs: 1, log: () => {}, ...extra });
+const count = async (sql: string): Promise<number> => (await query<{ n: number }>(sql)).rows[0]!.n;
 
 test('first sync inserts everything and logs a successful run', async () => {
   const run = await sync();
@@ -25,10 +28,10 @@ test('first sync inserts everything and logs a successful run', async () => {
   assert.equal(await count('SELECT count(*)::int AS n FROM balls'), 5);
 
   const { rows } = await query(`SELECT * FROM balls WHERE ball_id = '3'`);
-  assert.equal(Number(rows[0].core_rg), 2.5);
-  assert.equal(rows[0].weight, '15');
-  assert.equal(rows[0].release_date, '2022-03-01');
-  assert.equal(rows[0].raw.ball_name, 'Black Widow 3.0');
+  assert.equal(Number(rows[0]!.core_rg), 2.5);
+  assert.equal(rows[0]!.weight, '15');
+  assert.equal(rows[0]!.release_date, '2022-03-01');
+  assert.equal(rows[0]!.raw.ball_name, 'Black Widow 3.0');
 });
 
 test('unparsable numbers become NULL but the raw value is kept', async () => {
@@ -48,14 +51,14 @@ test('changed balls are updated, new balls inserted, first_seen_at kept', async 
   await sync();
   const { rows: before } = await query(`SELECT first_seen_at FROM balls WHERE ball_id = '2'`);
 
-  const changed = BALLS_15.map((b) => (b.ball_id === '2' ? { ...b, availability: 'Discontinued' } : b));
+  const changed = BALLS_15.map((b: Record<string, string>) => (b.ball_id === '2' ? { ...b, availability: 'Discontinued' } : b));
   const run = await sync({ 15: [...changed, upstreamBall({ ball_id: '5', ball_name: 'New Ball', release_date: '2026-10-01' })] });
 
   assert.equal(run.stats.balls_15.updated, 1);
   assert.equal(run.stats.balls_15.inserted, 1);
   const { rows } = await query(`SELECT availability, first_seen_at FROM balls WHERE ball_id = '2'`);
-  assert.equal(rows[0].availability, 'Discontinued');
-  assert.deepEqual(rows[0].first_seen_at, before[0].first_seen_at);
+  assert.equal(rows[0]!.availability, 'Discontinued');
+  assert.deepEqual(rows[0]!.first_seen_at, before[0]!.first_seen_at);
 });
 
 test('balls missing upstream are soft-deleted and restored when they return', async () => {
@@ -104,7 +107,7 @@ test('a run is skipped while another one is running; stale runs are closed out',
 
 test('uses the v2 catalog when bowwwl ignores the page parameter, legacy for weights v2 lacks', async () => {
   const upstream = fakeUpstream({ v2: BALLS_15, 15: new Error('legacy endpoint broken') });
-  const run = await runSync({ weights: [14, 15], fetchFn: upstream.fetchFn, retryBackoffMs: 1, log: () => {} });
+  const run = (await runSync({ weights: [14, 15], fetchFn: upstream.fetchFn, retryBackoffMs: 1, log: () => {} })) as Awaited<ReturnType<typeof sync>>;
 
   assert.equal(run.status, 'success');
   assert.equal(run.stats.balls_15.source, 'v2');
@@ -117,7 +120,7 @@ test('uses the v2 catalog when bowwwl ignores the page parameter, legacy for wei
 test('follows real v2 paging until a page adds nothing', async () => {
   const pages = [BALLS_15.slice(0, 2), BALLS_15.slice(2, 3), BALLS_15.slice(3), [], []];
   const upstream = fakeUpstream({ v2: pages });
-  const run = await runSync({ weights: [15], fetchFn: upstream.fetchFn, retryBackoffMs: 1, log: () => {} });
+  const run = (await runSync({ weights: [15], fetchFn: upstream.fetchFn, retryBackoffMs: 1, log: () => {} })) as Awaited<ReturnType<typeof sync>>;
 
   assert.equal(run.stats.balls_15.source, 'v2');
   assert.equal(run.stats.balls_15.fetched, 4);

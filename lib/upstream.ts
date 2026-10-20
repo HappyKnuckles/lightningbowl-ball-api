@@ -19,7 +19,10 @@ export interface FetchOptions {
   backoffMs?: number;
 }
 
-export async function fetchList(path: string, { fetchFn = fetch, timeoutMs = 30000, retries = 3, backoffMs = 2000 }: FetchOptions = {}): Promise<unknown[]> {
+export async function fetchList(
+  path: string,
+  { fetchFn = fetch, timeoutMs = 30000, retries = 3, backoffMs = 2000 }: FetchOptions = {},
+): Promise<unknown[]> {
   const url = `${UPSTREAM_BASE}${path}`;
   let lastError: Error = new Error(`${url}: no attempt made`);
 
