@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { closePool } from '../lib/db.js';
 import { runSync } from '../lib/sync.js';
 
-if (!process.env.DATABASE_URL && existsSync('.env.local')) process.loadEnvFile('.env.local');
+if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL && existsSync('.env.local')) process.loadEnvFile('.env.local');
 
 try {
   const run = await runSync({ trigger: 'manual' });

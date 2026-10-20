@@ -1,6 +1,6 @@
 // GET /api/balls/export[?weight=lbs] — the whole active catalog (optionally one
 // weight) as a plain array, newest first. For clients that keep an offline copy.
-import { withCors } from '../../middleware.js';
+import { withCors } from '../../lib/cors.js';
 import { exportBalls } from '../../lib/balls.js';
 import { parseNumber } from '../../lib/params.js';
 import { sendJson, withErrorHandling } from '../../lib/respond.js';
