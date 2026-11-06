@@ -25,7 +25,9 @@ async function handler(_req: ApiRequest, res: ApiResponse) {
       (SELECT count(*)::int FROM balls WHERE removed_at IS NULL) AS balls,
       (SELECT count(*)::int FROM brands WHERE removed_at IS NULL) AS brands,
       (SELECT count(*)::int FROM cores WHERE removed_at IS NULL) AS cores,
-      (SELECT count(*)::int FROM coverstocks WHERE removed_at IS NULL) AS coverstocks`),
+      (SELECT count(*)::int FROM coverstocks WHERE removed_at IS NULL) AS coverstocks,
+      (SELECT count(*)::int FROM ball_images WHERE url IS NOT NULL) AS images_copied,
+      (SELECT count(*)::int FROM ball_images WHERE url IS NULL) AS images_pending`),
     query<SyncRun>(`SELECT id, started_at, finished_at, status, trigger, stats, errors FROM sync_runs ORDER BY started_at DESC LIMIT 1`),
   ]);
 

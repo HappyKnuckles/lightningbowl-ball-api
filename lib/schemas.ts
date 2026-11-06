@@ -211,9 +211,9 @@ export const Ball = z
     availability: nullableText('"Available" or a discontinued state.'),
     us_int: nullableText('"US" or "Overseas".'),
     release_date: z.iso.date().nullable().meta({ description: 'Release date (YYYY-MM-DD), null if unknown.' }),
-    ball_image: nullableText('Image URL.'),
-    core_image: nullableText('Image URL.'),
-    thumbnail_image: nullableText('Image URL.'),
+    ball_image: nullableText('Image on images.lightningbowl.de once it is copied there; until then the image path or URL as bowwwl.com gives it.'),
+    core_image: nullableText('Image on images.lightningbowl.de once it is copied there; until then the image path or URL as bowwwl.com gives it.'),
+    thumbnail_image: nullableText('Image on images.lightningbowl.de once it is copied there; until then the image path or URL as bowwwl.com gives it.'),
     last_update: nullableText('When bowwwl.com last changed the ball, as it reports it.'),
     first_seen_at: z.iso.datetime({ offset: true }).meta({ description: 'When this ball first appeared in the catalog.' }),
     removed_at: z.iso
@@ -281,6 +281,8 @@ export const Health = z
       brands: z.number().int(),
       cores: z.number().int(),
       coverstocks: z.number().int(),
+      images_copied: z.number().int().meta({ description: 'Ball images copied to images.lightningbowl.de.' }),
+      images_pending: z.number().int().meta({ description: 'Ball images not copied yet (new, or failed and waiting for a retry).' }),
     }),
     lastSync: SyncRun.nullable(),
   })

@@ -36,6 +36,10 @@ const SEARCH_COLUMNS: [column: string, weight: number][] = [
   ['factory_finish', 0.5],
 ];
 
+/** An image field: our copy (003_ball_images.sql) once there is one, bowwwl.com's path until then. */
+const imageSql = (field: string) =>
+  `coalesce((SELECT url FROM ball_images WHERE source = balls.raw->>'${field}'), nullif(balls.raw->>'${field}', ''))`;
+
 /** What the API returns per ball (the `Ball` schema), built from the typed columns. */
 const BALL_JSON = `jsonb_build_object(
   'ball_id', ball_id, 'ball_name', ball_name, 'core_weight', core_weight,
@@ -45,8 +49,8 @@ const BALL_JSON = `jsonb_build_object(
   'coverstock_id', coverstock_id, 'coverstock_name', coverstock_name, 'coverstock_type', coverstock_type,
   'factory_finish', factory_finish, 'availability', availability, 'us_int', us_int,
   'release_date', to_char(release_date, 'YYYY-MM-DD'),
-  'ball_image', nullif(raw->>'ball_image', ''), 'core_image', nullif(raw->>'core_image', ''),
-  'thumbnail_image', nullif(raw->>'thumbnail_image', ''), 'last_update', nullif(raw->>'last_update', ''),
+  'ball_image', ${imageSql('ball_image')}, 'core_image', ${imageSql('core_image')},
+  'thumbnail_image', ${imageSql('thumbnail_image')}, 'last_update', nullif(raw->>'last_update', ''),
   'first_seen_at', first_seen_at
 )`;
 

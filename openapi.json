@@ -1312,21 +1312,21 @@
             "description": "Release date (YYYY-MM-DD), null if unknown."
           },
           "ball_image": {
-            "description": "Image URL.",
+            "description": "Image on images.lightningbowl.de once it is copied there; until then the image path or URL as bowwwl.com gives it.",
             "type": [
               "string",
               "null"
             ]
           },
           "core_image": {
-            "description": "Image URL.",
+            "description": "Image on images.lightningbowl.de once it is copied there; until then the image path or URL as bowwwl.com gives it.",
             "type": [
               "string",
               "null"
             ]
           },
           "thumbnail_image": {
-            "description": "Image URL.",
+            "description": "Image on images.lightningbowl.de once it is copied there; until then the image path or URL as bowwwl.com gives it.",
             "type": [
               "string",
               "null"
@@ -1601,13 +1601,27 @@
                 "type": "integer",
                 "minimum": -9007199254740991,
                 "maximum": 9007199254740991
+              },
+              "images_copied": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Ball images copied to images.lightningbowl.de."
+              },
+              "images_pending": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Ball images not copied yet (new, or failed and waiting for a retry)."
               }
             },
             "required": [
               "balls",
               "brands",
               "cores",
-              "coverstocks"
+              "coverstocks",
+              "images_copied",
+              "images_pending"
             ],
             "additionalProperties": false
           },
