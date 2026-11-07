@@ -442,11 +442,15 @@
       "get": {
         "operationId": "exportBalls",
         "summary": "Whole catalog as an array",
-        "security": [],
+        "security": [
+          {
+            "adminSecret": []
+          }
+        ],
         "tags": [
           "Balls"
         ],
-        "description": "Every active ball (optionally one weight), newest first. Not paged.",
+        "description": "Every active ball (optionally one weight), newest first. Not paged. Needs `ADMIN_SECRET`.",
         "parameters": [
           {
             "name": "weight",
@@ -476,6 +480,16 @@
           },
           "400": {
             "description": "Invalid parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong secret.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1076,10 +1090,15 @@
       "get": {
         "operationId": "getHealth",
         "summary": "Catalog size and last sync",
-        "security": [],
+        "security": [
+          {
+            "adminSecret": []
+          }
+        ],
         "tags": [
           "Operations"
         ],
+        "description": "Needs `ADMIN_SECRET`.",
         "responses": {
           "200": {
             "description": "Status.",
@@ -1087,6 +1106,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong secret.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -1117,73 +1146,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotInitialized"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/cron/sync": {
-      "get": {
-        "operationId": "runSync",
-        "summary": "Run the catalog sync",
-        "security": [
-          {
-            "cronSecret": []
-          }
-        ],
-        "tags": [
-          "Operations"
-        ],
-        "description": "Called nightly by Vercel Cron. Applies pending migrations, then imports from bowwwl.com.",
-        "responses": {
-          "200": {
-            "description": "Finished run (`success` or `partial`).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SyncRun"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or wrong secret.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Another run is in progress.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SyncSkipped"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Every part of the run failed.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SyncRun"
                 }
               }
             }
@@ -1715,20 +1677,6 @@
         ],
         "additionalProperties": false
       },
-      "SyncSkipped": {
-        "type": "object",
-        "properties": {
-          "skipped": {
-            "type": "boolean",
-            "const": true
-          }
-        },
-        "required": [
-          "skipped"
-        ],
-        "additionalProperties": false,
-        "description": "Another sync was still running."
-      },
       "Error": {
         "type": "object",
         "properties": {
@@ -1743,10 +1691,10 @@
       }
     },
     "securitySchemes": {
-      "cronSecret": {
+      "adminSecret": {
         "type": "http",
         "scheme": "bearer",
-        "description": "`CRON_SECRET`"
+        "description": "`ADMIN_SECRET`"
       }
     }
   }

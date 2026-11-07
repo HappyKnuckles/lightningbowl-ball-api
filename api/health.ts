@@ -1,4 +1,6 @@
-// GET /api/health — catalog size and the latest sync run.
+// GET /api/health — catalog size and the latest sync run. Needs ADMIN_SECRET:
+// sync errors name the upstream endpoints.
+import { requireSecret } from '../lib/auth.js';
 import { withCors } from '../lib/cors.js';
 import { query } from '../lib/db.js';
 import type { ApiRequest, ApiResponse } from '../lib/http.js';
@@ -6,7 +8,6 @@ import { withErrorHandling } from '../lib/respond.js';
 import type { Health, SyncRun } from '../lib/schemas.js';
 
 async function handler(_req: ApiRequest, res: ApiResponse) {
-  res.setHeader('Cache-Control', 'no-store');
   try {
     await query('SELECT 1 FROM balls LIMIT 1');
   } catch (error) {
@@ -35,4 +36,4 @@ async function handler(_req: ApiRequest, res: ApiResponse) {
   res.status(200).json(body);
 }
 
-export default withCors(withErrorHandling(handler));
+export default withCors(requireSecret('ADMIN_SECRET', withErrorHandling(handler)));

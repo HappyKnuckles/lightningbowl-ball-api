@@ -166,7 +166,8 @@ test('the sync copies images after the balls and reports them; health counts the
   assert.deepEqual(run.stats.images, { copied: 4, failed: 0, remaining: 0, bytes: 16 });
   assert.equal(puts.length, 4);
 
-  const health = await call(healthHandler);
+  process.env.ADMIN_SECRET = 'admin-secret';
+  const health = await call(healthHandler, {}, { headers: { authorization: 'Bearer admin-secret' } });
   assert.equal(health.body.counts.images_copied, 4);
   assert.equal(health.body.counts.images_pending, 0);
 });

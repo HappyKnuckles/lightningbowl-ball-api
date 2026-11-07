@@ -163,10 +163,36 @@ test('catalog lists stay plain arrays and page on request', async () => {
   );
 });
 
+const admin = { headers: { authorization: 'Bearer admin-secret' } };
+
 test('health reports counts and the last sync', async () => {
-  const res = await call(healthHandler);
+  process.env.ADMIN_SECRET = 'admin-secret';
+  const res = await call(healthHandler, {}, admin);
   assert.equal(res.body.counts.balls, 8);
   assert.equal(res.body.lastSync.status, 'success');
+});
+
+test('health and export need ADMIN_SECRET and are never cached publicly', async () => {
+  for (const handler of [healthHandler, exportHandler]) {
+    delete process.env.ADMIN_SECRET;
+    const unconfigured = await call(handler, {}, admin);
+    assert.equal(unconfigured.statusCode, 500);
+    assert.equal(unconfigured.body.error, 'ADMIN_SECRET is not configured');
+
+    process.env.ADMIN_SECRET = 'admin-secret';
+    const anonymous = await call(handler);
+    assert.equal(anonymous.statusCode, 401);
+    assert.equal(anonymous.headers['www-authenticate'], 'Bearer');
+    assert.equal(anonymous.body.lastSync, undefined);
+    assert.equal((await call(handler, {}, { headers: { authorization: 'Bearer wrong-secret!' } })).statusCode, 401);
+    // the cron secret isn't the admin secret
+    process.env.CRON_SECRET = 'test-secret';
+    assert.equal((await call(handler, {}, { headers: { authorization: 'Bearer test-secret' } })).statusCode, 401);
+
+    const allowed = await call(handler, {}, admin);
+    assert.equal(allowed.statusCode, 200);
+    assert.equal(allowed.headers['cache-control'], 'private, no-store');
+  }
 });
 
 test('cron endpoint requires the secret', async () => {
@@ -179,14 +205,15 @@ test('cron endpoint requires the secret', async () => {
 });
 
 test('GET /api/balls/export returns the whole catalog newest first', async () => {
-  const all = await call(exportHandler);
+  process.env.ADMIN_SECRET = 'admin-secret';
+  const all = await call(exportHandler, {}, admin);
   assert.equal(all.body.length, 8);
-  const fifteen = await call(exportHandler, { weight: '15' });
+  const fifteen = await call(exportHandler, { weight: '15' }, admin);
   assert.deepEqual(
     fifteen.body.map((b: Record<string, string>) => b.ball_id),
     ['7', '6', '2', '3', '4', '1', '8'],
   );
-  assert.equal((await call(exportHandler, { weight: 'heavy' })).statusCode, 400);
+  assert.equal((await call(exportHandler, { weight: 'heavy' }, admin)).statusCode, 400);
 });
 
 test('filters by exact ball name, case-insensitively and repeatable', async () => {
