@@ -189,6 +189,11 @@ const nullableNumber = (description: string) => z.number().nullable().meta({ des
 
 export const Ball = z
   .strictObject({
+    key: z.string().meta({
+      description:
+        'Identifies this ball in this weight: `ball_id` and `core_weight` joined by "-", e.g. "1234-15" (the form `favorite` takes). Treat it as opaque.',
+      example: '1234-15',
+    }),
     ball_id: z.string(),
     ball_name: z.string(),
     core_weight: z.string().meta({

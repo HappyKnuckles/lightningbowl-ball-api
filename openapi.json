@@ -1159,6 +1159,11 @@
       "Ball": {
         "type": "object",
         "properties": {
+          "key": {
+            "type": "string",
+            "description": "Identifies this ball in this weight: `ball_id` and `core_weight` joined by \"-\", e.g. \"1234-15\" (the form `favorite` takes). Treat it as opaque.",
+            "example": "1234-15"
+          },
           "ball_id": {
             "type": "string"
           },
@@ -1322,6 +1327,7 @@
           }
         },
         "required": [
+          "key",
           "ball_id",
           "ball_name",
           "core_weight",

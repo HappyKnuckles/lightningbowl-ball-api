@@ -123,6 +123,17 @@ test('search combines with filters and explicit sort', async () => {
   assert.deepEqual(ids(res), ['2-15', '1-15']);
 });
 
+test('every ball has a key for its weight that favorites accept', async () => {
+  const res = await call(ballHandler, { id: '1' });
+  assert.deepEqual(
+    res.body.map((ball: BallLike & { key: string }) => [ball.key, `${ball.ball_id}-${ball.core_weight}`]),
+    res.body.map((ball: BallLike) => [`${ball.ball_id}-${ball.core_weight}`, `${ball.ball_id}-${ball.core_weight}`]),
+  );
+  const key = res.body[0].key;
+  const page = await call(ballsHandler, { weight: res.body[0].core_weight, favorite: key });
+  assert.equal(page.body.content[0].key, key);
+});
+
 test('GET /api/balls/{id} returns all variants heaviest first, or 404', async () => {
   const res = await call(ballHandler, { id: '1' });
   assert.deepEqual(
