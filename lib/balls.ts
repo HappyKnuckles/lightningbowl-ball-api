@@ -49,6 +49,7 @@ const imageSql = (field: string) => `coalesce((SELECT url FROM ball_images WHERE
 
 /** What the API returns per ball (the `Ball` schema), built from the typed columns. */
 const BALL_JSON = `jsonb_build_object(
+  'key', ball_id || '-' || core_weight,
   'ball_id', ball_id, 'ball_name', ball_name, 'core_weight', core_weight,
   'brand_id', brand_id, 'brand_name', brand_name,
   'core_id', core_id, 'core_name', core_name, 'core_type', core_type,

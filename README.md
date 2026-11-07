@@ -74,7 +74,7 @@ Paged response:
 
 ```json
 {
-  "content": [{ "ball_id": "1234", "ball_name": "Phaze V", "core_weight": "15", "core_rg": 2.49, "core_diff": 0.052, "release_date": "2023-05-01", "…": "…" }],
+  "content": [{ "key": "1234-15", "ball_id": "1234", "ball_name": "Phaze V", "core_weight": "15", "core_rg": 2.49, "core_diff": 0.052, "release_date": "2023-05-01", "…": "…" }],
   "page": { "number": 0, "size": 20, "totalElements": 1234, "totalPages": 62 }
 }
 ```
@@ -107,6 +107,8 @@ The default order is newest release first.
 /api/balls?addedAfter=2026-10-01&sort=first_seen_at,desc   # new in the catalog
 /api/balls?weight=15&favorite=1234-15&favorite=987-15       # favorites first
 ```
+
+Every ball comes with a `key` (`ball_id` and `core_weight` joined by `-`, e.g. `1234-15`) that identifies it in its weight; `favorite` accepts it, and clients should treat it as opaque.
 
 ### `GET /api/balls/export[?weight=15]`
 
