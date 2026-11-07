@@ -8,6 +8,7 @@
     "migrate": "tsx scripts/migrate.ts",
     "sync": "tsx scripts/sync.ts",
     "openapi": "tsx scripts/openapi.ts",
+    "mirror-images": "tsx scripts/mirror-images.ts",
     "test": "node --import tsx --test --test-concurrency=1 \"test/**/*.test.ts\""
   },
   "license": "ISC",

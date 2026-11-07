@@ -9,6 +9,8 @@
 //   failing part doesn't stop the others. The run is logged in `sync_runs`.
 
 import { query } from './db.js';
+import { mirrorImages, type MirrorOptions, type MirrorStats } from './images.js';
+import { type ImageStore, r2ConfigFromEnv, r2Store } from './r2.js';
 import { type BallRow, ballKey, normalizeBall, normalizeBrand, normalizeCore, normalizeCoverstock, type ReferenceRow } from './normalize.js';
 import { migrate } from './migrate.js';
 import type { SyncRun } from './schemas.js';
@@ -20,6 +22,8 @@ export const DEFAULT_WEIGHTS = [12, 13, 14, 15, 16];
 const MIN_REMOVAL_RATIO = 0.5;
 const BATCH_SIZE = 500;
 const STALE_RUN_MS = 30 * 60 * 1000;
+/** The cron function may run 300 s; image copying gets what's left until this point of the run. */
+const IMAGE_DEADLINE_MS = 240 * 1000;
 
 export function configuredWeights(): number[] {
   const env = process.env.SYNC_WEIGHTS;
@@ -226,6 +230,11 @@ export interface SyncOptions {
   fetchFn?: FetchFn;
   retryBackoffMs?: number;
   log?: (message: string) => void;
+  /** Where ball images are copied to; from the R2_* environment by default, null to skip copying. */
+  imageStore?: ImageStore | null;
+  /** Time for copying images; by default what's left of the first 240 s of the run. */
+  imageBudgetMs?: number;
+  imageFetchFn?: MirrorOptions['fetchFn'];
 }
 
 /**
@@ -238,7 +247,11 @@ export async function runSync({
   fetchFn = fetch,
   retryBackoffMs,
   log = console.log,
+  imageStore = defaultImageStore(),
+  imageBudgetMs,
+  imageFetchFn,
 }: SyncOptions = {}): Promise<SyncRun | { skipped: true }> {
+  const startedAt = Date.now();
   const fetchOptions: FetchOptions = { fetchFn, ...(retryBackoffMs !== undefined && { backoffMs: retryBackoffMs }) };
 
   // Creates or updates the schema, so a fresh database needs no manual step.
@@ -269,7 +282,7 @@ export async function runSync({
     return { skipped: true };
   }
 
-  const stats: Record<string, PartStats | string[]> = {};
+  const stats: Record<string, PartStats | MirrorStats | string[]> = {};
   const errors: string[] = [];
   const warnings: string[] = [];
   const context: RunContext = { fetchOptions, getV2Catalog, warnings };
@@ -292,6 +305,22 @@ export async function runSync({
     }
   }
 
+  // After the balls, so new balls' images are known. Failed images are retried
+  // on later runs and don't fail the run; only a broken copy step does.
+  if (imageStore) {
+    try {
+      const budgetMs = imageBudgetMs ?? Math.max(0, IMAGE_DEADLINE_MS - (Date.now() - startedAt));
+      stats.images = await mirrorImages({ store: imageStore, budgetMs, fetchFn: imageFetchFn, log });
+      log(`images: ${JSON.stringify(stats.images)}`);
+    } catch (error) {
+      const message = (error as Error).message;
+      errors.push(`images: ${message}`);
+      log(`images failed: ${message}`);
+    }
+  } else {
+    warnings.push('images: R2 is not configured, images are not copied');
+  }
+
   if (warnings.length > 0) stats.warnings = warnings;
   const status = errors.length === 0 ? 'success' : errors.length === parts.length ? 'failed' : 'partial';
 
@@ -301,4 +330,9 @@ export async function runSync({
     [runId, status, JSON.stringify(stats), JSON.stringify(errors)],
   );
   return rows[0]!;
+}
+
+function defaultImageStore(): ImageStore | null {
+  const config = r2ConfigFromEnv();
+  return config ? r2Store(config) : null;
 }

@@ -28,6 +28,18 @@ Local development: copy `.env.example` to `.env.local`, then `npm install`, `npm
 - **Failures are isolated.** Each part (a table or a weight) succeeds or fails on its own, and the run ends as `success`, `partial` or `failed`.
 - **Runs are logged** in `sync_runs`. Overlapping runs are skipped, and runs that never finished are closed out after 30 minutes. `GET /api/health` shows the latest run.
 
+## Ball images
+
+Ball images are copied to Cloudflare R2 (the bucket behind `images.lightningbowl.de` that also holds the pattern charts, under `balls/`), so the app doesn't load them from bowwwl.com.
+
+- **After the balls**, each sync copies images that have no copy yet, newest balls first, for whatever is left of the first 240 s of the run (the cron may run 300 s). `stats.images` shows `copied`, `failed`, `remaining` and `bytes`.
+- **Copies are keyed by bowwwl's image path** (`ball_images` table), so balls that share an image across weights share one copy, and an image that changes upstream (new path) is copied again. Objects are stored with `Cache-Control: public, max-age=31536000, immutable`.
+- **Responses** (`ball_image`, `core_image`, `thumbnail_image`) give the copy's URL once there is one, and bowwwl's absolute URL until then.
+- **Failed images** (not found, not an image, over 5 MB) are retried a day later, three times at most. `GET /api/health` counts `images_copied` and `images_pending`.
+- **First fill:** run `npm run mirror-images` once locally with the production `DATABASE_URL` and the R2 variables; it copies everything that's missing, in rounds of 200, without the cron's time limit.
+- **Without the R2 variables** nothing is copied and the run adds a warning; responses keep bowwwl's paths.
+- **CORS on the bucket:** to let the app draw ball images into share screenshots, the bucket needs a CORS rule allowing `GET` from the app's origins (R2 → bucket → Settings → CORS policy).
+
 Every row keeps the untouched upstream object in `raw` for reference. Queries and responses use the typed columns next to it: specs (`core_rg`, `core_diff`, `core_int_diff`) are numbers or `null`, `release_date` is `YYYY-MM-DD`, and every response object has exactly the fields its schema lists. Field names match bowwwl.com's.
 
 ## Docs and types
@@ -119,7 +131,7 @@ Sorted by name (cores and coverstocks by brand, then name). Optional parameters:
 
 ### `GET /api/health`
 
-Catalog counts and the latest sync run. Not cached.
+Catalog counts (including copied and pending ball images) and the latest sync run. Not cached.
 
 ## Indexes
 
@@ -156,3 +168,6 @@ The plan is for the app to send a snapshot of its own totals, which replaces tha
 | `SYNC_WEIGHTS` | Weights to sync, default `12,13,14,15,16`. |
 | `DB_POOL_MAX` | Connections per function instance, default `3`. |
 | `BOWWWL_API_BASE` | Upstream base URL, default `https://bowwwl.com/restapi`. |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Cloudflare R2 credentials for copying ball images (same as the pattern backend's). Without them images aren't copied. |
+| `R2_BUCKET_NAME` | Bucket, default `pattern-charts`. |
+| `R2_PUBLIC_DOMAIN` | Public URL of the bucket, default `https://images.lightningbowl.de`. |

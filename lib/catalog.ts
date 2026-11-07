@@ -1,6 +1,7 @@
 // Reference lists (brands, cores, coverstocks): search, brand filter, sort and
 // optional paging. Without page/size a plain array is returned, like the proxy.
 import { query } from './db.js';
+import { UPSTREAM_BASE } from './upstream.js';
 import { escapeLike, pageOf, SqlParams } from './params.js';
 import { BrandQuery, CoreQuery, CoverstockQuery, DEFAULT_PAGE_SIZE, parseQuery, type RawQuery, sortOrders } from './schemas.js';
 
@@ -13,10 +14,13 @@ interface CatalogConfig {
   defaultOrder: string;
 }
 
+/** Origin that bowwwl.com's relative logo paths resolve against. */
+const LOGO_ORIGIN = new URL(UPSTREAM_BASE).origin;
+
 export const CATALOGS = {
   brands: {
     schema: BrandQuery,
-    json: `jsonb_build_object('id', id, 'brand_name', name, 'logo', nullif(raw->>'logo', ''))`,
+    json: `jsonb_build_object('id', id, 'brand_name', name, 'logo', CASE WHEN raw->>'logo' ~* '^https?://' THEN raw->>'logo' WHEN raw->>'logo' LIKE '/%' THEN '${LOGO_ORIGIN}' || (raw->>'logo') END)`,
     searchExpr: 'lower(name)',
     sortSql: { brand_name: 'lower(name)' },
     defaultOrder: 'lower(name)',

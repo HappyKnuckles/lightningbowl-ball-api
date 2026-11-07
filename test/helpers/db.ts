@@ -37,5 +37,5 @@ export async function startDatabase(): Promise<() => Promise<void>> {
 }
 
 export async function resetDatabase(): Promise<void> {
-  await query('TRUNCATE balls, brands, cores, coverstocks, sync_runs, stat_contributors RESTART IDENTITY CASCADE');
+  await query('TRUNCATE balls, brands, cores, coverstocks, sync_runs, stat_contributors, ball_images RESTART IDENTITY CASCADE');
 }

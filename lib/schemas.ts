@@ -191,11 +191,9 @@ export const Ball = z
   .strictObject({
     ball_id: z.string(),
     ball_name: z.string(),
-    core_weight: z
-      .string()
-      .meta({
-        description: 'Weight in lbs as bowwwl.com spells it, e.g. "15". A ball exists once per weight; `ball_id` + `core_weight` identify it.',
-      }),
+    core_weight: z.string().meta({
+      description: 'Weight in lbs as bowwwl.com spells it, e.g. "15". A ball exists once per weight; `ball_id` + `core_weight` identify it.',
+    }),
     brand_id: nullableText(),
     brand_name: nullableText(),
     core_id: nullableText(),
@@ -211,9 +209,9 @@ export const Ball = z
     availability: nullableText('"Available" or a discontinued state.'),
     us_int: nullableText('"US" or "Overseas".'),
     release_date: z.iso.date().nullable().meta({ description: 'Release date (YYYY-MM-DD), null if unknown.' }),
-    ball_image: nullableText('Image URL.'),
-    core_image: nullableText('Image URL.'),
-    thumbnail_image: nullableText('Image URL.'),
+    ball_image: nullableText('Absolute image URL, null if bowwwl.com has none: on images.lightningbowl.de once the image is copied there, on bowwwl.com until then.'),
+    core_image: nullableText('Absolute image URL, null if bowwwl.com has none: on images.lightningbowl.de once the image is copied there, on bowwwl.com until then.'),
+    thumbnail_image: nullableText('Absolute image URL, null if bowwwl.com has none: on images.lightningbowl.de once the image is copied there, on bowwwl.com until then.'),
     last_update: nullableText('When bowwwl.com last changed the ball, as it reports it.'),
     first_seen_at: z.iso.datetime({ offset: true }).meta({ description: 'When this ball first appeared in the catalog.' }),
     removed_at: z.iso
@@ -241,7 +239,9 @@ export const BallPage = z
 
 export type BallPage = z.infer<typeof BallPage>;
 
-export const Brand = z.strictObject({ id: z.string(), brand_name: z.string(), logo: nullableText('Logo URL.') }).meta({ id: 'Brand' });
+export const Brand = z
+  .strictObject({ id: z.string(), brand_name: z.string(), logo: nullableText('Absolute logo URL, null if there is none.') })
+  .meta({ id: 'Brand' });
 export const Core = z.strictObject({ id: z.string(), core_name: z.string(), brand: nullableText('Brand name.') }).meta({ id: 'Core' });
 export const Coverstock = z
   .strictObject({ id: z.string(), coverstock_name: z.string(), brand: nullableText('Brand name.') })
@@ -281,6 +281,8 @@ export const Health = z
       brands: z.number().int(),
       cores: z.number().int(),
       coverstocks: z.number().int(),
+      images_copied: z.number().int().meta({ description: 'Ball images copied to images.lightningbowl.de.' }),
+      images_pending: z.number().int().meta({ description: 'Ball images not copied yet (new, or failed and waiting for a retry).' }),
     }),
     lastSync: SyncRun.nullable(),
   })
