@@ -10,9 +10,9 @@ Ball catalog API for [Lightning Bowl](https://github.com/HappyKnuckles/lightning
 ## Setup
 
 1. **Deploy to Vercel** and connect a Neon database (Storage → Neon). The integration sets `DATABASE_URL` / `POSTGRES_URL`.
-2. **Add `CRON_SECRET`** (any long random string, e.g. `openssl rand -hex 32`) and **`ALLOWED_ORIGINS`** (the app's production origin), then redeploy so the function picks them up.
+2. **Add `CRON_SECRET`** and **`ADMIN_SECRET`** (two different long random strings, e.g. `openssl rand -hex 32`) and **`ALLOWED_ORIGINS`** (the app's production origin), then redeploy so the function picks them up.
 3. **Run the first sync:** Vercel → project → **Settings → Cron Jobs** → **Run** next to `/api/cron/sync`. It creates the tables and imports the catalog; takes a minute or two. After that it runs nightly on its own.
-4. **Check** `GET /api/health`: `counts.balls` should be in the thousands and `lastSync.status` `success` (or `partial`, see below).
+4. **Check** `GET /api/health` (`curl -H "Authorization: Bearer $ADMIN_SECRET" https://balls.lightningbowl.de/api/health`): `counts.balls` should be in the thousands and `lastSync.status` `success` (or `partial`, see below).
 
 Local development: copy `.env.example` to `.env.local`, then `npm install`, `npm run sync` (also migrates) and `npm run dev` (http://localhost:3003, docs at `/api/docs`). `npm test` runs against a throwaway embedded Postgres and needs no database; `npm run typecheck` runs `tsc`.
 
@@ -110,7 +110,7 @@ The default order is newest release first.
 
 ### `GET /api/balls/export[?weight=15]`
 
-The whole active catalog (optionally one weight) as a plain array, newest first. Not paged. Meant for clients that keep an offline copy. CDN-cached for an hour.
+The whole active catalog (optionally one weight) as a plain array, newest first. Not paged. **Needs `Authorization: Bearer <ADMIN_SECRET>`**, since it hands out bowwwl's whole catalog in one request; never cached by the CDN.
 
 ### `GET /api/balls/{id}[?weight=15]`
 
@@ -131,7 +131,9 @@ Sorted by name (cores and coverstocks by brand, then name). Optional parameters:
 
 ### `GET /api/health`
 
-Catalog counts (including copied and pending ball images) and the latest sync run. Not cached.
+Catalog counts (including copied and pending ball images) and the latest sync run. **Needs `Authorization: Bearer <ADMIN_SECRET>`**, since sync errors name the upstream endpoints. Not cached.
+
+`/api/cron/sync` takes `CRON_SECRET` and is only for Vercel Cron, so it isn't in the OpenAPI document. Without its variable each of these endpoints answers `500` instead of opening up. In Swagger UI, enter `ADMIN_SECRET` under **Authorize** to try health and export.
 
 ## Indexes
 
@@ -164,6 +166,7 @@ The plan is for the app to send a snapshot of its own totals, which replaces tha
 | --- | --- |
 | `DATABASE_URL` | Neon pooled connection string (required). `POSTGRES_URL` also works; Vercel's Neon integration sets both. |
 | `CRON_SECRET` | Protects `/api/cron/sync` (required in production). |
+| `ADMIN_SECRET` | Protects `/api/health` and `/api/balls/export` (required for them to answer). Different from `CRON_SECRET`. |
 | `ALLOWED_ORIGINS` | Comma-separated CORS origins. Vercel previews of the app are always allowed. |
 | `SYNC_WEIGHTS` | Weights to sync, default `12,13,14,15,16`. |
 | `DB_POOL_MAX` | Connections per function instance, default `3`. |

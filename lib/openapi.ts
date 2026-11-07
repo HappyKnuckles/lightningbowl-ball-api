@@ -21,7 +21,6 @@ import {
   PageMeta,
   SimilarQuery,
   SyncRun,
-  SyncSkipped,
   WeightQuery,
 } from './schemas.js';
 
@@ -40,7 +39,6 @@ const COMPONENTS = [
   Health,
   NotInitialized,
   SyncRun,
-  SyncSkipped,
   ApiError,
 ];
 
@@ -73,6 +71,9 @@ function parameters(schema: z.ZodObject, location: 'query' | 'path' = 'query') {
     };
   });
 }
+
+/** For endpoints that need ADMIN_SECRET; `/api/cron/sync` (CRON_SECRET, for Vercel Cron only) isn't documented. */
+const unauthorized = { '401': json(ref(ApiError), 'Missing or wrong secret.') };
 
 const get = (operationId: string, summary: string, operation: Record<string, unknown>) => ({
   // Public unless the operation says otherwise.
@@ -126,9 +127,10 @@ export function buildOpenApi(): JsonSchema {
       }),
       '/balls/export': get('exportBalls', 'Whole catalog as an array', {
         tags: ['Balls'],
-        description: 'Every active ball (optionally one weight), newest first. Not paged.',
+        description: 'Every active ball (optionally one weight), newest first. Not paged. Needs `ADMIN_SECRET`.',
+        security: [{ adminSecret: [] }],
         parameters: parameters(WeightQuery),
-        responses: { '200': json({ type: 'array', items: ref(Ball) }, 'All balls.'), ...errors },
+        responses: { '200': json({ type: 'array', items: ref(Ball) }, 'All balls.'), ...unauthorized, ...errors },
       }),
       '/balls/{id}': get('getBall', 'One ball in all its weights', {
         tags: ['Balls'],
@@ -156,22 +158,13 @@ export function buildOpenApi(): JsonSchema {
       '/coverstocks': get('listCoverstocks', 'Coverstocks', catalogOperation('Catalog', CoverstockQuery, Coverstock, CoverstockPage)),
       '/health': get('getHealth', 'Catalog size and last sync', {
         tags: ['Operations'],
+        description: 'Needs `ADMIN_SECRET`.',
+        security: [{ adminSecret: [] }],
         responses: {
           '200': json(ref(Health), 'Status.'),
+          ...unauthorized,
           '429': errors['429'],
           '503': json(ref(NotInitialized), 'Database not set up yet.'),
-          '500': errors['500'],
-        },
-      }),
-      '/cron/sync': get('runSync', 'Run the catalog sync', {
-        tags: ['Operations'],
-        description: 'Called nightly by Vercel Cron. Applies pending migrations, then imports from bowwwl.com.',
-        security: [{ cronSecret: [] }],
-        responses: {
-          '200': json(ref(SyncRun), 'Finished run (`success` or `partial`).'),
-          '401': json(ref(ApiError), 'Missing or wrong secret.'),
-          '409': json(ref(SyncSkipped), 'Another run is in progress.'),
-          '502': json(ref(SyncRun), 'Every part of the run failed.'),
           '500': errors['500'],
         },
       }),
@@ -179,7 +172,7 @@ export function buildOpenApi(): JsonSchema {
     components: {
       schemas: components,
       securitySchemes: {
-        cronSecret: { type: 'http', scheme: 'bearer', description: '`CRON_SECRET`' },
+        adminSecret: { type: 'http', scheme: 'bearer', description: '`ADMIN_SECRET`' },
       },
     },
   };

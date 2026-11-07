@@ -53,7 +53,8 @@ async function expectShape(handler: Handler, query: RawQuery, schema: z.ZodType,
 test('balls endpoints match their documented schemas', async () => {
   await expectShape(ballsHandler, {}, BallPage);
   await expectShape(ballsHandler, { search: 'phaze', size: '1' }, BallPage);
-  await expectShape(exportHandler, {}, z.array(Ball));
+  process.env.ADMIN_SECRET = 'contract-admin';
+  await expectShape(exportHandler, {}, z.array(Ball), 200, { authorization: 'Bearer contract-admin' });
   await expectShape(ballHandler, { id: '1' }, z.array(Ball));
   await expectShape(similarHandler, { id: '1' }, z.array(Ball));
 });
@@ -68,7 +69,9 @@ test('catalog endpoints match their schemas, as arrays and as pages', async () =
 });
 
 test('health, errors and the sync match their schemas', async () => {
-  await expectShape(healthHandler, {}, Health);
+  process.env.ADMIN_SECRET = 'contract-admin';
+  await expectShape(healthHandler, {}, Health, 200, { authorization: 'Bearer contract-admin' });
+  await expectShape(healthHandler, {}, ApiError, 401);
   await expectShape(ballsHandler, { sort: 'nope' }, ApiError, 400);
   await expectShape(ballHandler, { id: 'missing' }, ApiError, 404);
 
