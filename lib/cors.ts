@@ -69,8 +69,8 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
 // Fixed regex for Vercel preview deployments of the lightningbowl project
 const vercelPreviewRegex = /^https:\/\/lightningbowl-[a-z0-9]+(?:-[a-z0-9]+)*-nicos-projects-1c3811a7\.vercel\.app$/;
 
-// CORS middleware wrapper for Vercel serverless functions
-export function withCors(handler: Handler): Handler {
+// CORS middleware wrapper for Vercel serverless functions. Each endpoint takes one method.
+export function withCors(handler: Handler, { method = 'GET' }: { method?: 'GET' | 'POST' } = {}): Handler {
   return async (req: ApiRequest, res: ApiResponse) => {
     // Apply rate limiting first
     if (!rateLimit(req, res)) {
@@ -84,14 +84,14 @@ export function withCors(handler: Handler): Handler {
 
     if (isAllowedOrigin) {
       res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+      res.setHeader('Access-Control-Allow-Methods', `${method},OPTIONS`);
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
       res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Access-Control-Max-Age', '86400'); // Cache preflight for 24 hours
     } else if (origin === 'null') {
       // For installed PWAs - don't allow credentials
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+      res.setHeader('Access-Control-Allow-Methods', `${method},OPTIONS`);
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
       res.setHeader('Access-Control-Max-Age', '86400');
     } else if (origin) {
@@ -112,8 +112,7 @@ export function withCors(handler: Handler): Handler {
       return;
     }
 
-    // Only allow GET requests
-    if (req.method !== 'GET') {
+    if (req.method !== method) {
       res.status(405).json({ error: 'Method not allowed' });
       return;
     }

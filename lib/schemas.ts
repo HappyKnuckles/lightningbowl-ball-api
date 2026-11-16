@@ -147,6 +147,27 @@ export const SimilarQuery = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(10).meta({ description: 'Maximum number of results.' }),
 });
 
+export const ImageSearchQuery = z.object({
+  weight,
+  limit: z.coerce.number().int().min(1).max(50).default(10).meta({ description: 'Maximum number of results.' }),
+});
+
+/** Largest photo a search takes; the app scales photos down to about 512 px first. */
+export const MAX_SEARCH_IMAGE_BYTES = 3 * 1024 * 1024;
+
+export const ImageSearchRequest = z
+  .object({
+    image: z
+      .string()
+      .min(1)
+      // base64 takes 4 characters per 3 bytes, plus room for a data URL prefix
+      .max(Math.ceil(MAX_SEARCH_IMAGE_BYTES / 3) * 4 + 100)
+      .meta({
+        description: `The photo as base64, or as a data URL (\`data:image/jpeg;base64,...\`). JPEG, PNG or WebP, at most ${MAX_SEARCH_IMAGE_BYTES / 1024 / 1024} MB; about 512 px on the long side is plenty.`,
+      }),
+  })
+  .meta({ id: 'ImageSearchRequest' });
+
 // ------------------------------------------------------------- catalog query
 
 const catalogQuery = <const F extends readonly string[]>(sortFields: F, withBrand: boolean) =>
@@ -228,6 +249,15 @@ export const Ball = z
   .meta({ id: 'Ball', description: 'A ball in one weight.' });
 
 export type Ball = z.infer<typeof Ball>;
+
+export const ImageMatch = z
+  .strictObject({
+    score: z.number().meta({
+      description: 'How alike the photo and the ball picture are (cosine similarity, at most 1). Compare scores of one search, not across searches.',
+    }),
+    ball: Ball,
+  })
+  .meta({ id: 'ImageMatch' });
 
 export const PageMeta = z
   .object({
@@ -355,6 +385,25 @@ export function normalizeQuery(schema: z.ZodObject, raw: RawQuery): Record<strin
     }
   }
   return result;
+}
+
+/** Validates a JSON request body; any problem becomes a 400 with a readable message. */
+export function parseBody<S extends z.ZodObject>(schema: S, body: unknown): z.output<S> {
+  let value = body;
+  if (typeof value === 'string' || value instanceof Uint8Array) {
+    try {
+      value = JSON.parse(typeof value === 'string' ? value : new TextDecoder().decode(value));
+    } catch {
+      throw new BadRequestError('Body must be JSON');
+    }
+  }
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    const issue = result.error.issues[0]!;
+    if (issue.path.length === 0) throw new BadRequestError('Body must be a JSON object');
+    throw new BadRequestError(`Field "${String(issue.path[0])}" ${issue.message.charAt(0).toLowerCase()}${issue.message.slice(1)}`);
+  }
+  return result.data;
 }
 
 /** Validates a query string; any problem becomes a 400 with a readable message. */

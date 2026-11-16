@@ -7,6 +7,8 @@ export interface ApiRequest {
   method?: string;
   url?: string;
   query: RawQuery;
+  /** The request body: parsed JSON on Vercel (and in the dev server), a string or bytes otherwise. */
+  body?: unknown;
   headers: IncomingHttpHeaders;
   socket?: { remoteAddress?: string };
 }

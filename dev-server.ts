@@ -6,6 +6,7 @@ import http from 'node:http';
 import ball from './api/balls/[id]/index.js';
 import similar from './api/balls/[id]/similar.js';
 import exportBalls from './api/balls/export.js';
+import imageSearch from './api/balls/image-search.js';
 import balls from './api/balls/index.js';
 import brands from './api/brands.js';
 import cores from './api/cores.js';
@@ -24,6 +25,7 @@ const PORT = Number(process.env.PORT || 3003);
 const routes: [RegExp, Handler][] = [
   [/^\/api\/balls$/, balls],
   [/^\/api\/balls\/export$/, exportBalls],
+  [/^\/api\/balls\/image-search$/, imageSearch],
   [/^\/api\/balls\/(?<id>[^/]+)$/, ball],
   [/^\/api\/balls\/(?<id>[^/]+)\/similar$/, similar],
   [/^\/api\/brands$/, brands],
@@ -54,6 +56,20 @@ function toApiResponse(res: http.ServerResponse): ApiResponse {
   return api;
 }
 
+/** The body parsed like Vercel does for JSON, as text otherwise; undefined without one. */
+async function readBody(req: http.IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk as Buffer);
+  if (chunks.length === 0) return undefined;
+  const text = Buffer.concat(chunks).toString('utf8');
+  if (!/^application\/json/i.test(req.headers['content-type'] ?? '')) return text;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
 function queryObject(searchParams: URLSearchParams): RawQuery {
   const query: RawQuery = {};
   for (const [key, value] of searchParams) {
@@ -81,6 +97,7 @@ http
         headers: req.headers,
         socket: req.socket,
         query: { ...queryObject(url.searchParams), ...params },
+        body: await readBody(req),
       };
       try {
         await handler(apiReq, api);

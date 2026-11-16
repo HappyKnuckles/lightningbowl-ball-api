@@ -17,7 +17,7 @@ let ip = 0;
 export async function call(
   handler: Handler,
   query: RawQuery = {},
-  { headers = {}, method = 'GET' }: { headers?: Record<string, string>; method?: string } = {},
+  { headers = {}, method = 'GET', body }: { headers?: Record<string, string>; method?: string; body?: unknown } = {},
 ) {
   const result: TestResponse = { statusCode: 200, headers: {}, body: undefined };
   const res: ApiResponse = {
@@ -37,6 +37,6 @@ export async function call(
   };
   // A fresh client IP per call keeps the in-memory rate limiter out of the way.
   ip++;
-  await handler({ method, query, headers: { 'x-forwarded-for': `10.0.${Math.floor(ip / 250)}.${ip % 250}`, ...headers }, socket: {} }, res);
+  await handler({ method, query, body, headers: { 'x-forwarded-for': `10.0.${Math.floor(ip / 250)}.${ip % 250}`, ...headers }, socket: {} }, res);
   return result;
 }

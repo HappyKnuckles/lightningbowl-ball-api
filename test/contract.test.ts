@@ -7,6 +7,7 @@ import { z } from 'zod';
 import ballHandler from '../api/balls/[id]/index.js';
 import similarHandler from '../api/balls/[id]/similar.js';
 import exportHandler from '../api/balls/export.js';
+import { imageSearchHandler } from '../api/balls/image-search.js';
 import ballsHandler from '../api/balls/index.js';
 import brandsHandler from '../api/brands.js';
 import coresHandler from '../api/cores.js';
@@ -15,6 +16,7 @@ import cronHandler from '../api/cron/sync.js';
 import docsHandler from '../api/docs.js';
 import healthHandler from '../api/health.js';
 import openapiHandler from '../api/openapi.js';
+import { type Embedder, embedImages } from '../lib/embeddings.js';
 import type { Handler } from '../lib/http.js';
 import {
   ApiError,
@@ -27,6 +29,7 @@ import {
   Coverstock,
   CoverstockPage,
   Health,
+  ImageMatch,
   type RawQuery,
   SyncRun,
 } from '../lib/schemas.js';
@@ -57,6 +60,28 @@ test('balls endpoints match their documented schemas', async () => {
   await expectShape(exportHandler, {}, z.array(Ball), 200, { authorization: 'Bearer contract-admin' });
   await expectShape(ballHandler, { id: '1' }, z.array(Ball));
   await expectShape(similarHandler, { id: '1' }, z.array(Ball));
+});
+
+test('image search matches its documented schema', async () => {
+  const embedder: Embedder = { model: async () => 'contract', embed: async () => ({ model: 'contract', vector: [0.6, 0.8] }) };
+  const picture = { ok: true, status: 200, headers: new Headers({ 'content-type': 'image/png' }), arrayBuffer: async () => new ArrayBuffer(4) };
+  await embedImages({ embedder, fetchFn: async () => picture });
+  const search = (image: string) =>
+    call(
+      imageSearchHandler(() => embedder),
+      {},
+      { method: 'POST', body: { image } },
+    );
+
+  const found = await search(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0]).toString('base64'));
+  assert.equal(found.statusCode, 200, JSON.stringify(found.body));
+  assert.ok(found.body.length > 0);
+  const result = z.array(ImageMatch).safeParse(found.body);
+  assert.ok(result.success, result.success ? '' : z.prettifyError(result.error));
+
+  const bad = await search('nope');
+  assert.equal(bad.statusCode, 400);
+  assert.ok(ApiError.safeParse(bad.body).success);
 });
 
 test('catalog endpoints match their schemas, as arrays and as pages', async () => {
