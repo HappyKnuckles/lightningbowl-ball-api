@@ -2,7 +2,7 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import sharp from 'sharp';
-import { modelName, parseDtype, readPicture, unitLength } from './clip.ts';
+import { modelName, parseDtype, readPicture, unitLength } from './model.ts';
 import { createEmbedderServer, type ImageModel, UnreadableImageError } from './server.ts';
 
 /** Reads the picture for real, then makes a vector of its average colour. */

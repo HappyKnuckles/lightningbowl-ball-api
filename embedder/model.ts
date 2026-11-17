@@ -1,9 +1,9 @@
-// CLIP's image encoder through transformers.js (ONNX Runtime on the CPU).
-import { AutoImageProcessor, CLIPVisionModelWithProjection, RawImage } from '@huggingface/transformers';
+// The image model through transformers.js (ONNX Runtime on the CPU): CLIP's image encoder or DINOv2.
+import { AutoConfig, AutoImageProcessor, AutoModel, CLIPVisionModelWithProjection, RawImage, type Tensor } from '@huggingface/transformers';
 import sharp from 'sharp';
 import { type ImageModel, UnreadableImageError } from './server.ts';
 
-/** Phone photos can be huge; CLIP looks at 224 px, so anything past this is shrunk first. */
+/** Phone photos can be huge; the models look at 224 px, so anything past this is shrunk first. */
 const WORKING_SIZE = 448;
 
 /**
@@ -50,15 +50,38 @@ export function modelName(checkpoint: string, dtype: Dtype): string {
   return dtype === 'fp32' ? checkpoint : `${checkpoint}@${dtype}`;
 }
 
-/** Loads (and downloads, the first time) a CLIP checkpoint in ONNX form, e.g. Xenova/clip-vit-base-patch32. */
-export async function loadClip(checkpoint: string, dtype: Dtype = 'q8'): Promise<ImageModel> {
+/**
+ * The vector of one picture, by model family:
+ * - CLIP (`clip`): the image embedding, the image side of what CLIP learned from captioned pictures.
+ * - DINOv2 (`dinov2`, `dinov2_with_registers`): the class token. Learned from pictures alone, it tells
+ *   apart individual objects better and pays far less attention to printed text.
+ */
+type Encoder = (inputs: Record<string, Tensor>) => Promise<Tensor>;
+
+async function loadEncoder(checkpoint: string, dtype: Dtype): Promise<Encoder> {
+  const { model_type: family } = await AutoConfig.from_pretrained(checkpoint);
+  if (family === 'clip') {
+    const vision = await CLIPVisionModelWithProjection.from_pretrained(checkpoint, { dtype });
+    return async (inputs) => (await vision(inputs)).image_embeds;
+  }
+  if (family === 'dinov2' || family === 'dinov2_with_registers') {
+    const model = await AutoModel.from_pretrained(checkpoint, { dtype });
+    return async (inputs) => (await model(inputs)).pooler_output;
+  }
+  throw new Error(`${checkpoint} is a ${family} model; the embedder knows CLIP and DINOv2`);
+}
+
+/**
+ * Loads (and downloads, the first time) an image model in ONNX form: a CLIP checkpoint such as
+ * Xenova/clip-vit-base-patch32, or DINOv2 such as onnx-community/dinov2-small.
+ */
+export async function loadModel(checkpoint: string, dtype: Dtype = 'q8'): Promise<ImageModel> {
   const processor = await AutoImageProcessor.from_pretrained(checkpoint);
-  const vision = await CLIPVisionModelWithProjection.from_pretrained(checkpoint, { dtype });
+  const encode = await loadEncoder(checkpoint, dtype);
 
   const embed = async (bytes: Uint8Array) => {
     const inputs = await processor(await readPicture(bytes));
-    const { image_embeds } = await vision(inputs);
-    return unitLength(image_embeds.data as Float32Array);
+    return unitLength((await encode(inputs)).data as Float32Array);
   };
 
   // also warms the model up, so the first real request isn't slow

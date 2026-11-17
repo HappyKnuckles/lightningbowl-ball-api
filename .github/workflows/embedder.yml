@@ -79,20 +79,23 @@ jobs:
           cache-to: type=gha,mode=max,scope=embedder
 
       # the model really loads and embeds in the image (the tests use a stand-in)
+      # the model really loads and embeds in the image (the tests use a stand-in); CLIP by default, and DINOv2
       - name: The image embeds a picture
         run: |
-          docker buildx build --load -t embedder-check embedder > /dev/null
-          docker run -d --name embedder -p 8080:8080 -e API_KEY=check embedder-check
-          for _ in $(seq 60); do curl -sf -H 'Authorization: Bearer check' http://localhost:8080/ && break; sleep 2; done
-          echo
           python3 -c "import zlib,struct
           def chunk(t,d): return struct.pack('>I',len(d))+t+d+struct.pack('>I',zlib.crc32(t+d))
           row=b'\x00'+b'\xe6\x78\x1e'*64
           open('ball.png','wb').write(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',64,64,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(row*64))+chunk(b'IEND',b''))"
-          curl -sf -H 'Authorization: Bearer check' -H 'Content-Type: image/png' --data-binary @ball.png http://localhost:8080/embed \
-            | python3 -c "import json,sys; r=json.load(sys.stdin); print(r['model'], r['dim']); assert r['dim'] == len(r['embedding']) > 0"
-          docker logs embedder
-          docker rm -f embedder
+          for model in "" onnx-community/dinov2-small; do
+            docker buildx build --load -t embedder-check ${model:+--build-arg MODEL=$model} embedder > /dev/null
+            docker run -d --name embedder -p 8080:8080 -e API_KEY=check embedder-check
+            for _ in $(seq 60); do curl -sf -H 'Authorization: Bearer check' http://localhost:8080/ && break; sleep 2; done
+            echo
+            curl -sf -H 'Authorization: Bearer check' -H 'Content-Type: image/png' --data-binary @ball.png http://localhost:8080/embed \
+              | python3 -c "import json,sys; r=json.load(sys.stdin); print(r['model'], r['dim']); assert r['dim'] == len(r['embedding']) > 0"
+            docker logs embedder
+            docker rm -f embedder
+          done
 
   rollout:
     needs: image

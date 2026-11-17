@@ -1,6 +1,6 @@
 # Ball embedder
 
-Turns ball pictures into vectors for the Ball API's image search (`POST /api/balls/image-search`). It runs CLIP's image encoder ([`Xenova/clip-vit-base-patch32`](https://huggingface.co/Xenova/clip-vit-base-patch32), ONNX, CPU) through transformers.js. Like the ball tracker it runs in Docker on a VPS rather than on Vercel: the model needs a few hundred MB of memory and a warm process.
+Turns ball pictures into vectors for the Ball API's image search (`POST /api/balls/image-search`). It runs an image model through transformers.js (ONNX, CPU): CLIP's image encoder ([`Xenova/clip-vit-base-patch32`](https://huggingface.co/Xenova/clip-vit-base-patch32)) by default, or DINOv2 ([`onnx-community/dinov2-small`](https://huggingface.co/onnx-community/dinov2-small)), which tells individual objects apart better and leans less on printed text. Like the ball tracker it runs in Docker on a VPS rather than on Vercel: the model needs a few hundred MB of memory and a warm process.
 
 ## API
 
@@ -26,12 +26,12 @@ docker run -d --restart unless-stopped -p 8080:8080 -e API_KEY=$(openssl rand -h
 
 The build downloads the model into the image, so the container starts without reaching Hugging Face.
 
-| Variable    |                                                                                                                                                                                                                |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `API_KEY`   | Required as `Authorization: Bearer <key>` when set.                                                                                                                                                            |
-| `PORT`      | Default `8080`.                                                                                                                                                                                                |
-| `DTYPE`     | Weights: `q8` (default, about 90 MB and roughly twice as fast on a CPU), `fp16` or `fp32` (about 350 MB). A switch makes the API embed every picture again.                                                    |
-| `MODEL`     | A CLIP checkpoint in ONNX form (build argument and variable), default `Xenova/clip-vit-base-patch32`; `Xenova/clip-vit-base-patch16` is slower and finer. A new model makes the API embed every picture again. |
-| `MODEL_DIR` | Where models are kept, default `./models`.                                                                                                                                                                     |
+| Variable    |                                                                                                                                                                                                                                                                               |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `API_KEY`   | Required as `Authorization: Bearer <key>` when set.                                                                                                                                                                                                                           |
+| `PORT`      | Default `8080`.                                                                                                                                                                                                                                                               |
+| `DTYPE`     | Weights: `q8` (default, about 90 MB and roughly twice as fast on a CPU), `fp16` or `fp32` (about 350 MB). A switch makes the API embed every picture again.                                                                                                                   |
+| `MODEL`     | A CLIP or DINOv2 checkpoint in ONNX form (build argument and variable), default `Xenova/clip-vit-base-patch32`; `Xenova/clip-vit-base-patch16` is slower and finer; `onnx-community/dinov2-small` or `-base` for DINOv2. A new model makes the API embed every picture again. |
+| `MODEL_DIR` | Where models are kept, default `./models`.                                                                                                                                                                                                                                    |
 
 Locally (Node 22.18+, which runs the TypeScript directly): `ONNXRUNTIME_NODE_INSTALL=skip npm install`, `npm start`, `npm test` (the HTTP side and picture reading, with a stand-in model), `npm run typecheck`.

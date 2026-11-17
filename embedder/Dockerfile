@@ -9,10 +9,11 @@ WORKDIR /srv
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-COPY clip.ts main.ts server.ts ./
+COPY model.ts main.ts server.ts ./
 
 # The model goes into the image, so the container starts without reaching Hugging Face.
-# A different MODEL (any CLIP checkpoint in ONNX form) or DTYPE makes the Ball API embed every picture again.
+# A different MODEL (a CLIP or DINOv2 checkpoint in ONNX form, e.g. onnx-community/dinov2-small) or DTYPE
+# makes the Ball API embed every picture again.
 ARG MODEL=Xenova/clip-vit-base-patch32
 # q8: a quarter of the memory of fp32 and about twice as fast, which matters on a one-core server
 ARG DTYPE=q8
