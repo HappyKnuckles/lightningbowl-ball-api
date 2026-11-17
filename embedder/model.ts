@@ -56,17 +56,23 @@ export function modelName(checkpoint: string, dtype: Dtype): string {
  * - DINOv2 (`dinov2`, `dinov2_with_registers`): the class token. Learned from pictures alone, it tells
  *   apart individual objects better and pays far less attention to printed text.
  */
-type Encoder = (inputs: Record<string, Tensor>) => Promise<Tensor>;
+type Encoder = (inputs: Record<string, Tensor>) => Promise<Float32Array>;
 
 async function loadEncoder(checkpoint: string, dtype: Dtype): Promise<Encoder> {
   const { model_type: family } = await AutoConfig.from_pretrained(checkpoint);
   if (family === 'clip') {
     const vision = await CLIPVisionModelWithProjection.from_pretrained(checkpoint, { dtype });
-    return async (inputs) => (await vision(inputs)).image_embeds;
+    return async (inputs) => (await vision(inputs)).image_embeds.data as Float32Array;
   }
   if (family === 'dinov2' || family === 'dinov2_with_registers') {
     const model = await AutoModel.from_pretrained(checkpoint, { dtype });
-    return async (inputs) => (await model(inputs)).pooler_output;
+    return async (inputs) => {
+      // the ONNX exports only give the token states; the first is the class token (already layer-normed,
+      // which is all the pooled output would add)
+      const { last_hidden_state: tokens } = (await model(inputs)) as { last_hidden_state: Tensor };
+      const width = tokens.dims.at(-1)!;
+      return (tokens.data as Float32Array).slice(0, width);
+    };
   }
   throw new Error(`${checkpoint} is a ${family} model; the embedder knows CLIP and DINOv2`);
 }
@@ -81,7 +87,7 @@ export async function loadModel(checkpoint: string, dtype: Dtype = 'q8'): Promis
 
   const embed = async (bytes: Uint8Array) => {
     const inputs = await processor(await readPicture(bytes));
-    return unitLength((await encode(inputs)).data as Float32Array);
+    return unitLength(await encode(inputs));
   };
 
   // also warms the model up, so the first real request isn't slow
