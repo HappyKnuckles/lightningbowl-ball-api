@@ -44,7 +44,7 @@ Ball images are copied to Cloudflare R2 (the bucket behind `images.lightningbowl
 
 `POST /api/balls/image-search` finds a ball from a photo. Each ball picture is turned into a vector by an image model (CLIP), and a search compares the photo's vector with all of them.
 
-- **The model runs in the embedder service** ([`embedder/`](embedder/)), a small Docker container for a VPS: too heavy for a Vercel function. The API reaches it through `EMBEDDER_URL` and `EMBEDDER_KEY`, so it can be swapped for a hosted service later without touching the API.
+- **The model runs in the embedder service** ([`embedder/`](embedder/)), a small Docker container on the VPS (deployed by the Embedder workflow, see its README): too heavy for a Vercel function. The API reaches it through `EMBEDDER_URL` and `EMBEDDER_KEY`, so it can be swapped for a hosted service later without touching the API.
 - **After copying images**, each sync embeds pictures that have no vector yet, newest balls first, until 280 s into the run. Only `ball_image`: the core picture and the thumbnail show something else, or the same thing smaller. Pictures load from the R2 copy when there is one. `stats.embeddings` shows `embedded`, `failed` and `remaining`.
 - **Vectors are keyed by picture and model** (`image_embeddings` table). A new model embeds everything again, and a search only compares vectors of the model that embedded the photo.
 - **Failures:** a picture that can't be loaded or read is retried a day later, three times at most. When the embedder itself is down, the step stops (the run ends as `partial`) without counting it against the pictures.

@@ -2,7 +2,7 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import sharp from 'sharp';
-import { readPicture, unitLength } from './clip.ts';
+import { modelName, parseDtype, readPicture, unitLength } from './clip.ts';
 import { createEmbedderServer, type ImageModel, UnreadableImageError } from './server.ts';
 
 /** Reads the picture for real, then makes a vector of its average colour. */
@@ -118,4 +118,12 @@ test('reads pictures upright, as RGB, with transparency on white, and shrinks la
   assert.deepEqual([turned.width, turned.height], [20, 60]);
 
   await assert.rejects(readPicture(new TextEncoder().encode('<svg')), UnreadableImageError);
+});
+
+test('names the model with its weight format, so a switch re-embeds the catalog', () => {
+  assert.equal(parseDtype(undefined), 'q8');
+  assert.equal(parseDtype('fp32'), 'fp32');
+  assert.throws(() => parseDtype('q2'), /DTYPE must be one of/);
+  assert.equal(modelName('Xenova/clip-vit-base-patch32', 'q8'), 'Xenova/clip-vit-base-patch32@q8');
+  assert.equal(modelName('Xenova/clip-vit-base-patch32', 'fp32'), 'Xenova/clip-vit-base-patch32');
 });

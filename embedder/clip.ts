@@ -32,10 +32,28 @@ export function unitLength(vector: ArrayLike<number>): number[] {
   return values.map((v) => v / length);
 }
 
+/** Weight formats a checkpoint can come in; q8 is about a quarter the size of fp32 and roughly twice as fast on a CPU. */
+export const DTYPES = ['fp32', 'fp16', 'q8'] as const;
+export type Dtype = (typeof DTYPES)[number];
+
+export function parseDtype(value: string | undefined): Dtype {
+  const dtype = (value || 'q8') as Dtype;
+  if (!DTYPES.includes(dtype)) throw new Error(`DTYPE must be one of ${DTYPES.join(', ')}, not ${value}`);
+  return dtype;
+}
+
+/**
+ * The model's name as the Ball API stores it next to each vector. The weight format is part of it: other
+ * weights give slightly different vectors, so switching makes the API embed every picture again.
+ */
+export function modelName(checkpoint: string, dtype: Dtype): string {
+  return dtype === 'fp32' ? checkpoint : `${checkpoint}@${dtype}`;
+}
+
 /** Loads (and downloads, the first time) a CLIP checkpoint in ONNX form, e.g. Xenova/clip-vit-base-patch32. */
-export async function loadClip(name: string): Promise<ImageModel> {
-  const processor = await AutoImageProcessor.from_pretrained(name);
-  const vision = await CLIPVisionModelWithProjection.from_pretrained(name, { dtype: 'fp32' });
+export async function loadClip(checkpoint: string, dtype: Dtype = 'q8'): Promise<ImageModel> {
+  const processor = await AutoImageProcessor.from_pretrained(checkpoint);
+  const vision = await CLIPVisionModelWithProjection.from_pretrained(checkpoint, { dtype });
 
   const embed = async (bytes: Uint8Array) => {
     const inputs = await processor(await readPicture(bytes));
@@ -48,5 +66,5 @@ export async function loadClip(name: string): Promise<ImageModel> {
     .png()
     .toBuffer();
   const dim = (await embed(new Uint8Array(blank))).length;
-  return { name, dim, embed };
+  return { name: modelName(checkpoint, dtype), dim, embed };
 }

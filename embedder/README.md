@@ -1,6 +1,6 @@
 # Ball embedder
 
-Turns ball pictures into vectors for the Ball API's image search (`POST /api/balls/image-search`). It runs CLIP's image encoder ([`Xenova/clip-vit-base-patch32`](https://huggingface.co/Xenova/clip-vit-base-patch32), ONNX, CPU) through transformers.js. Like the ball tracker it runs in Docker on a VPS rather than on Vercel: the model needs about 600 MB of memory and a warm process.
+Turns ball pictures into vectors for the Ball API's image search (`POST /api/balls/image-search`). It runs CLIP's image encoder ([`Xenova/clip-vit-base-patch32`](https://huggingface.co/Xenova/clip-vit-base-patch32), ONNX, CPU) through transformers.js. Like the ball tracker it runs in Docker on a VPS rather than on Vercel: the model needs a few hundred MB of memory and a warm process.
 
 ## API
 
@@ -13,17 +13,24 @@ Turns ball pictures into vectors for the Ball API's image search (`POST /api/bal
 
 ## Run
 
+On the VPS (HappyKnuckles/vps runs it as the `embedder` service behind Caddy at `embed.lightningbowl.de`), the **Embedder** workflow of this repo deploys it: on every push to `main` that touches `embedder/` it runs the tests, builds the image for amd64 and arm64, checks that it really embeds a picture, pushes it to `ghcr.io/happyknuckles/lightningbowl-ball-embedder` and restarts the service. Secrets: `VPS_HOST`, `VPS_SSH_KEY` (as in the other repos) and `EMBEDDER_API_KEY` (e.g. `openssl rand -hex 32`; the same value goes into `EMBEDDER_KEY` of the Ball API on Vercel, Production and Preview).
+
+Then set `EMBEDDER_URL=https://embed.lightningbowl.de` on Vercel and run `npm run embed-images` in the API once to embed the catalog (on one core roughly 30–60 minutes; the nightly sync only adds new balls).
+
+By hand:
+
 ```bash
 docker build -t lightningbowl-ball-embedder .
 docker run -d --restart unless-stopped -p 8080:8080 -e API_KEY=$(openssl rand -hex 32) lightningbowl-ball-embedder
 ```
 
-The build downloads the model into the image (about 350 MB), so the container starts without reaching Hugging Face. Put it behind HTTPS (e.g. the same reverse proxy as the ball tracker), then set `EMBEDDER_URL` and `EMBEDDER_KEY` (= `API_KEY`) on the Ball API in Vercel, and run `npm run embed-images` in the API once to embed the catalog.
+The build downloads the model into the image, so the container starts without reaching Hugging Face.
 
 | Variable    |                                                                                                                                                                                                                |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `API_KEY`   | Required as `Authorization: Bearer <key>` when set.                                                                                                                                                            |
 | `PORT`      | Default `8080`.                                                                                                                                                                                                |
+| `DTYPE`     | Weights: `q8` (default, about 90 MB and roughly twice as fast on a CPU), `fp16` or `fp32` (about 350 MB). A switch makes the API embed every picture again.                                                    |
 | `MODEL`     | A CLIP checkpoint in ONNX form (build argument and variable), default `Xenova/clip-vit-base-patch32`; `Xenova/clip-vit-base-patch16` is slower and finer. A new model makes the API embed every picture again. |
 | `MODEL_DIR` | Where models are kept, default `./models`.                                                                                                                                                                     |
 
