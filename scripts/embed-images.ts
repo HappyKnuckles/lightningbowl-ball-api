@@ -1,5 +1,5 @@
 // Embeds all ball pictures that have no embedding yet, for image search:
-// `npm run embed-images` (needs DATABASE_URL and EMBEDDER_URL). The nightly sync
+// `npm run embed-images` (needs DATABASE_URL and EMBEDDER_URL; EMBED_CONCURRENCY for more pictures at once). The nightly sync
 // embeds new pictures within its time budget; this is for the first fill.
 import { existsSync } from 'node:fs';
 import { closePool } from '../lib/db.js';
@@ -14,12 +14,15 @@ if (!embedder) {
   process.exit(1);
 }
 
+// pictures in flight at once; match the embedder's CONCURRENCY (plus a little, to cover loading the pictures)
+const concurrency = Math.max(1, Number(process.env.EMBED_CONCURRENCY) || 4);
+
 try {
   await migrate({ log: () => {} });
   console.log(`model: ${await embedder.model()}`);
   // in rounds, to report progress
   for (;;) {
-    const stats = await embedImages({ embedder, limit: 200, log: (message) => console.warn(message) });
+    const stats = await embedImages({ embedder, limit: 200, concurrency, log: (message) => console.warn(message) });
     console.log(`embedded ${stats.embedded}, failed ${stats.failed}, ${stats.remaining} left`);
     if (stats.embedded + stats.failed === 0) break;
   }

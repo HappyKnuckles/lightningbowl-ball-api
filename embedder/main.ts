@@ -7,6 +7,7 @@
 // MODEL_DIR  where models are kept (default ./models)
 // API_KEY    when set, required as `Authorization: Bearer <key>` (the Ball API's EMBEDDER_KEY)
 // PORT       default 8080
+// CONCURRENCY pictures embedded at the same time, default 1 (more uses more cores for a first fill)
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { env } from '@huggingface/transformers';
@@ -23,5 +24,8 @@ console.log(`${model.name} loaded (${model.dim} dimensions) in ${((Date.now() - 
 if (!process.argv.includes('--download')) {
   if (!process.env.API_KEY) console.warn('API_KEY is not set: anyone who can reach this port can use it');
   const port = Number(process.env.PORT || 8080);
-  createEmbedderServer(model, { key: process.env.API_KEY || undefined }).listen(port, () => console.log(`Embedder listening on :${port}`));
+  createEmbedderServer(model, { key: process.env.API_KEY || undefined, concurrency: Math.max(1, Number(process.env.CONCURRENCY) || 1) }).listen(
+    port,
+    () => console.log(`Embedder listening on :${port}`),
+  );
 }

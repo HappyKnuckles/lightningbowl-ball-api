@@ -23,6 +23,8 @@ export interface ServerOptions {
   /** Required as `Authorization: Bearer <key>` when set. */
   key?: string;
   maxBytes?: number;
+  /** Pictures embedded at the same time; 1 (default) keeps memory flat and suits a one-core server. */
+  concurrency?: number;
   log?: (message: string) => void;
 }
 
@@ -44,13 +46,22 @@ async function readBody(req: http.IncomingMessage, maxBytes: number): Promise<Ui
   return new Uint8Array(Buffer.concat(chunks));
 }
 
-export function createEmbedderServer(model: ImageModel, { key, maxBytes = 8 * 1024 * 1024, log = console.error }: ServerOptions = {}): http.Server {
-  // one picture at a time: the model already uses every core, and memory stays flat
-  let queue: Promise<unknown> = Promise.resolve();
-  const embedInTurn = (image: Uint8Array) => {
-    const result = queue.then(() => model.embed(image));
-    queue = result.catch(() => {});
-    return result;
+export function createEmbedderServer(
+  model: ImageModel,
+  { key, maxBytes = 8 * 1024 * 1024, concurrency = 1, log = console.error }: ServerOptions = {},
+): http.Server {
+  // at most `concurrency` pictures at a time; the rest wait their turn
+  let running = 0;
+  const waiting: (() => void)[] = [];
+  const embedInTurn = async (image: Uint8Array) => {
+    if (running >= concurrency) await new Promise<void>((resolve) => waiting.push(resolve));
+    running++;
+    try {
+      return await model.embed(image);
+    } finally {
+      running--;
+      waiting.shift()?.();
+    }
   };
 
   return http.createServer(async (req, res) => {

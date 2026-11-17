@@ -90,6 +90,30 @@ test('embeds one picture at a time, and carries on after a failure', async () =>
   assert.equal(most, 1);
 });
 
+test('embeds several pictures at a time when asked to', async () => {
+  let running = 0;
+  let most = 0;
+  const slow: ImageModel = {
+    name: 'slow',
+    dim: 1,
+    async embed() {
+      running++;
+      most = Math.max(most, running);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      running--;
+      return [1];
+    },
+  };
+  const local = createEmbedderServer(slow, { concurrency: 2 });
+  await new Promise<void>((resolve) => local.listen(0, resolve));
+  const url = `http://localhost:${(local.address() as AddressInfo).port}/embed`;
+  const statuses = await Promise.all([1, 2, 3, 4, 5].map((n) => fetch(url, { method: 'POST', body: new Uint8Array([n]) }).then((r) => r.status)));
+  await new Promise<void>((resolve) => local.close(() => resolve()));
+
+  assert.deepEqual(statuses, [200, 200, 200, 200, 200]);
+  assert.equal(most, 2);
+});
+
 test('reads pictures upright, as RGB, with transparency on white, and shrinks large ones', async () => {
   const cutOut = await readPicture(await picture('rgba(0, 0, 0, 0)', 4));
   assert.equal(cutOut.channels, 3);
