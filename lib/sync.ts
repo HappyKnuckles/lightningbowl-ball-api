@@ -9,6 +9,7 @@
 //   failing part doesn't stop the others. The run is logged in `sync_runs`.
 
 import { query } from './db.js';
+import { type Embedder, embedderFromEnv, embedImages, type EmbedStats } from './embeddings.js';
 import { mirrorImages, type MirrorOptions, type MirrorStats } from './images.js';
 import { type ImageStore, r2ConfigFromEnv, r2Store } from './r2.js';
 import { type BallRow, ballKey, normalizeBall, normalizeBrand, normalizeCore, normalizeCoverstock, type ReferenceRow } from './normalize.js';
@@ -24,6 +25,8 @@ const BATCH_SIZE = 500;
 const STALE_RUN_MS = 30 * 60 * 1000;
 /** The cron function may run 300 s; image copying gets what's left until this point of the run. */
 const IMAGE_DEADLINE_MS = 240 * 1000;
+/** Embedding pictures (after copying them) stops starting new ones this long after the run started; the cron gets 300 s. */
+const EMBED_DEADLINE_MS = 280 * 1000;
 
 export function configuredWeights(): number[] {
   const env = process.env.SYNC_WEIGHTS;
@@ -235,6 +238,10 @@ export interface SyncOptions {
   /** Time for copying images; by default what's left of the first 240 s of the run. */
   imageBudgetMs?: number;
   imageFetchFn?: MirrorOptions['fetchFn'];
+  /** Embeds the ball pictures for image search; from EMBEDDER_URL by default, null to skip. */
+  embedder?: Embedder | null;
+  /** Time for embedding pictures; by default what's left of the first 280 s of the run. */
+  embedBudgetMs?: number;
 }
 
 /**
@@ -250,6 +257,8 @@ export async function runSync({
   imageStore = defaultImageStore(),
   imageBudgetMs,
   imageFetchFn,
+  embedder = embedderFromEnv(),
+  embedBudgetMs,
 }: SyncOptions = {}): Promise<SyncRun | { skipped: true }> {
   const startedAt = Date.now();
   const fetchOptions: FetchOptions = { fetchFn, ...(retryBackoffMs !== undefined && { backoffMs: retryBackoffMs }) };
@@ -282,7 +291,7 @@ export async function runSync({
     return { skipped: true };
   }
 
-  const stats: Record<string, PartStats | MirrorStats | string[]> = {};
+  const stats: Record<string, PartStats | MirrorStats | EmbedStats | string[]> = {};
   const errors: string[] = [];
   const warnings: string[] = [];
   const context: RunContext = { fetchOptions, getV2Catalog, warnings };
@@ -319,6 +328,22 @@ export async function runSync({
     }
   } else {
     warnings.push('images: R2 is not configured, images are not copied');
+  }
+
+  // After copying, so pictures load from our copies. A picture that can't be read is retried on
+  // later runs; the embedder failing fails this step (and makes the run partial).
+  if (embedder) {
+    try {
+      const budgetMs = embedBudgetMs ?? Math.max(0, EMBED_DEADLINE_MS - (Date.now() - startedAt));
+      stats.embeddings = await embedImages({ embedder, budgetMs, fetchFn: imageFetchFn, log });
+      log(`embeddings: ${JSON.stringify(stats.embeddings)}`);
+    } catch (error) {
+      const message = (error as Error).message;
+      errors.push(`embeddings: ${message}`);
+      log(`embeddings failed: ${message}`);
+    }
+  } else {
+    warnings.push('embeddings: EMBEDDER_URL is not set, pictures are not embedded for image search');
   }
 
   if (warnings.length > 0) stats.warnings = warnings;

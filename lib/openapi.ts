@@ -17,6 +17,9 @@ import {
   CoverstockPage,
   CoverstockQuery,
   Health,
+  ImageMatch,
+  ImageSearchQuery,
+  ImageSearchRequest,
   NotInitialized,
   PageMeta,
   SimilarQuery,
@@ -29,6 +32,8 @@ type JsonSchema = Record<string, unknown>;
 const COMPONENTS = [
   Ball,
   BallPage,
+  ImageMatch,
+  ImageSearchRequest,
   PageMeta,
   Brand,
   BrandPage,
@@ -153,6 +158,27 @@ export function buildOpenApi(): JsonSchema {
           ...errors,
         },
       }),
+      '/balls/image-search': {
+        post: {
+          operationId: 'searchBallsByImage',
+          summary: 'Balls that look like a photo',
+          security: [],
+          tags: ['Balls'],
+          description:
+            'Compares the photo with the catalog pictures and returns the most alike balls first, each ball once (in `weight`, or its heaviest weight). ' +
+            'Works best with the ball filling most of the photo. Pictures are embedded during the nightly sync, so the newest balls may be missing for a day.',
+          parameters: parameters(ImageSearchQuery),
+          requestBody: { required: true, content: { 'application/json': { schema: ref(ImageSearchRequest) } } },
+          responses: {
+            '200': json({ type: 'array', items: ref(ImageMatch) }, 'Most alike first (empty before any picture is embedded).'),
+            '400': json(ref(ApiError), 'Invalid parameter, or the body is no readable JPEG, PNG or WebP.'),
+            '429': errors['429'],
+            '502': json(ref(ApiError), 'The image search service failed; try again later.'),
+            '503': json(ref(ApiError), 'Image search is not set up.'),
+            '500': errors['500'],
+          },
+        },
+      },
       '/brands': get('listBrands', 'Brands', catalogOperation('Catalog', BrandQuery, Brand, BrandPage)),
       '/cores': get('listCores', 'Cores', catalogOperation('Catalog', CoreQuery, Core, CorePage)),
       '/coverstocks': get('listCoverstocks', 'Coverstocks', catalogOperation('Catalog', CoverstockQuery, Coverstock, CoverstockPage)),

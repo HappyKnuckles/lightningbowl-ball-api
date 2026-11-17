@@ -713,6 +713,117 @@
         }
       }
     },
+    "/balls/image-search": {
+      "post": {
+        "operationId": "searchBallsByImage",
+        "summary": "Balls that look like a photo",
+        "security": [],
+        "tags": [
+          "Balls"
+        ],
+        "description": "Compares the photo with the catalog pictures and returns the most alike balls first, each ball once (in `weight`, or its heaviest weight). Works best with the ball filling most of the photo. Pictures are embedded during the nightly sync, so the newest balls may be missing for a day.",
+        "parameters": [
+          {
+            "name": "weight",
+            "in": "query",
+            "required": false,
+            "description": "Ball weight in lbs.",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 20
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of results.",
+            "schema": {
+              "default": 10,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageSearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Most alike first (empty before any picture is embedded).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ImageMatch"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter, or the body is no readable JPEG, PNG or WebP.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (100 requests per minute per IP).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The image search service failed; try again later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Image search is not set up.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/brands": {
       "get": {
         "operationId": "listBrands",
@@ -1374,6 +1485,38 @@
         ],
         "additionalProperties": false,
         "description": "One page of balls (Spring `PagedModel` shape)."
+      },
+      "ImageMatch": {
+        "type": "object",
+        "properties": {
+          "score": {
+            "type": "number",
+            "description": "How alike the photo and the ball picture are (cosine similarity, at most 1). Compare scores of one search, not across searches."
+          },
+          "ball": {
+            "$ref": "#/components/schemas/Ball"
+          }
+        },
+        "required": [
+          "score",
+          "ball"
+        ],
+        "additionalProperties": false
+      },
+      "ImageSearchRequest": {
+        "type": "object",
+        "properties": {
+          "image": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4194404,
+            "description": "The photo as base64, or as a data URL (`data:image/jpeg;base64,...`). JPEG, PNG or WebP, at most 3 MB; about 512 px on the long side is plenty."
+          }
+        },
+        "required": [
+          "image"
+        ],
+        "additionalProperties": false
       },
       "PageMeta": {
         "type": "object",

@@ -1,0 +1,25 @@
+{
+  "name": "lightningbowl-ball-embedder",
+  "version": "1.0.0",
+  "description": "Turns ball pictures into vectors for the Ball API's image search",
+  "private": true,
+  "type": "module",
+  "license": "ISC",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node main.ts",
+    "download": "node main.ts --download",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --test-concurrency=1 \"*.test.ts\""
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.3.2",
+    "sharp": "0.35.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3"
+  }
+}

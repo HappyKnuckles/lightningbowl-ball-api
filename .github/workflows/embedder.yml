@@ -1,0 +1,141 @@
+name: Embedder
+
+# The embedder service (embedder/) for image search: tests and builds the image on PRs that touch it, and
+# on main pushes it to GHCR and rolls it out on the VPS. The server layout (docker-compose.yml, Caddy)
+# lives in the HappyKnuckles/vps repo; see its README for the one-time setup.
+#
+# Secrets: VPS_HOST, VPS_SSH_KEY (deploy user), EMBEDDER_API_KEY (= the API's EMBEDDER_KEY on Vercel).
+# Without VPS_HOST the image is still built and pushed, only the rollout is skipped.
+
+on:
+  push:
+    branches: [main]
+    paths: [embedder/**, .github/workflows/embedder.yml]
+  pull_request:
+    paths: [embedder/**, .github/workflows/embedder.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: embedder-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/happyknuckles/lightningbowl-ball-embedder
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: embedder
+    env:
+      ONNXRUNTIME_NODE_INSTALL: skip
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: embedder/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  image:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build${{ github.event_name != 'pull_request' && ' and push' || '' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: embedder
+          # amd64 and arm64, like the other images on the VPS
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=embedder
+          cache-to: type=gha,mode=max,scope=embedder
+
+      # the model really loads and embeds in the image (the tests use a stand-in)
+      # the model really loads and embeds in the image (the tests use a stand-in); CLIP by default, and DINOv2
+      - name: The image embeds a picture
+        run: |
+          python3 -c "import zlib,struct
+          def chunk(t,d): return struct.pack('>I',len(d))+t+d+struct.pack('>I',zlib.crc32(t+d))
+          row=b'\x00'+b'\xe6\x78\x1e'*64
+          open('ball.png','wb').write(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',64,64,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(row*64))+chunk(b'IEND',b''))"
+          for model in "" onnx-community/dinov2-small; do
+            docker buildx build --load -t embedder-check ${model:+--build-arg MODEL=$model} embedder > /dev/null
+            docker run -d --name embedder -p 8080:8080 -e API_KEY=check embedder-check
+            for _ in $(seq 60); do curl -sf -H 'Authorization: Bearer check' http://localhost:8080/ && break; sleep 2; done
+            echo
+            curl -sf -H 'Authorization: Bearer check' -H 'Content-Type: image/png' --data-binary @ball.png http://localhost:8080/embed \
+              | python3 -c "import json,sys; r=json.load(sys.stdin); print(r['model'], r['dim']); assert r['dim'] == len(r['embedding']) > 0"
+            docker logs embedder
+            docker rm -f embedder
+          done
+
+  rollout:
+    needs: image
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+    steps:
+      - name: Skip without a server
+        if: env.VPS_HOST == ''
+        run: echo "::notice::VPS_HOST is not set, image pushed but not deployed."
+
+      - name: SSH key
+        if: env.VPS_HOST != ''
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          printf 'Host vps\n  HostName %s\n  User deploy\n  IdentityFile ~/.ssh/id_deploy\n' "$VPS_HOST" > ~/.ssh/config
+
+      - name: Environment file
+        if: env.VPS_HOST != ''
+        env:
+          API_KEY: ${{ secrets.EMBEDDER_API_KEY }}
+        run: |
+          if [ -z "$API_KEY" ]; then echo "::error::Set the EMBEDDER_API_KEY secret, or anyone could use the embedder."; exit 1; fi
+          umask 077
+          printf 'API_KEY=%s\n' "$API_KEY" > embedder.env
+
+      - name: Roll out
+        if: env.VPS_HOST != ''
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          scp embedder.env vps:/opt/apps/embedder.env
+          printf '%s' "$GHCR_TOKEN" | ssh vps 'docker login ghcr.io -u ${{ github.actor }} --password-stdin'
+          ssh vps 'cd /opt/apps && docker compose pull embedder && docker compose up -d embedder && docker image prune -f'

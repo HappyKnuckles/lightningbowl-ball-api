@@ -40,6 +40,18 @@ Ball images are copied to Cloudflare R2 (the bucket behind `images.lightningbowl
 - **Without the R2 variables** nothing is copied and the run adds a warning; responses keep bowwwl's paths.
 - **CORS on the bucket:** to let the app draw ball images into share screenshots, the bucket needs a CORS rule allowing `GET` from the app's origins (R2 → bucket → Settings → CORS policy).
 
+## Image search
+
+`POST /api/balls/image-search` finds a ball from a photo. Each ball picture is turned into a vector by an image model (CLIP), and a search compares the photo's vector with all of them.
+
+- **The model runs in the embedder service** ([`embedder/`](embedder/)), a small Docker container on the VPS (deployed by the Embedder workflow, see its README): too heavy for a Vercel function. The API reaches it through `EMBEDDER_URL` and `EMBEDDER_KEY`, so it can be swapped for a hosted service later without touching the API.
+- **After copying images**, each sync embeds pictures that have no vector yet, newest balls first, until 280 s into the run. Only `ball_image`: the core picture and the thumbnail show something else, or the same thing smaller. Pictures load from the R2 copy when there is one. `stats.embeddings` shows `embedded`, `failed` and `remaining`.
+- **Vectors are keyed by picture and model** (`image_embeddings` table). A new model embeds everything again, and a search only compares vectors of the model that embedded the photo.
+- **Failures:** a picture that can't be loaded or read is retried a day later, three times at most. When the embedder itself is down, the step stops (the run ends as `partial`) without counting it against the pictures.
+- **First fill:** run `npm run embed-images` once locally with the production `DATABASE_URL` and `EMBEDDER_URL`/`EMBEDDER_KEY`; it embeds everything that's missing, in rounds of 200.
+- **Without `EMBEDDER_URL`** nothing is embedded (the run adds a warning) and the endpoint answers `503`.
+- **Search is brute force** over plain `real[]` columns, so it works on any Postgres: a few hundred milliseconds for a few thousand pictures. pgvector with an HNSW index is the step up if the catalog outgrows that.
+
 Every row keeps the untouched upstream object in `raw` for reference. Queries and responses use the typed columns next to it: specs (`core_rg`, `core_diff`, `core_int_diff`) are numbers or `null`, `release_date` is `YYYY-MM-DD`, and every response object has exactly the fields its schema lists. Field names match bowwwl.com's.
 
 ## Docs and types
@@ -122,6 +134,15 @@ All weight variants of a ball, heaviest first. This includes balls removed upstr
 
 Balls of the same weight with a similar expected reaction: same core type and coverstock type, RG within 0.03, differential within 0.008, and, for asymmetric cores, intermediate differential within 0.005. Newest first; `limit` is 1–50.
 
+### `POST /api/balls/image-search[?weight=15][&limit=10]`
+
+The balls that look most like a photo, most alike first, each ball once (in `weight`, or its heaviest weight). Body: `{ "image": "<base64>" }`, a JPEG, PNG or WebP of at most 3 MB, as plain base64 or a data URL; about 512 px on the long side is plenty. Each result is `{ score, ball }`, where `score` is the cosine similarity of photo and picture (up to 1; compare scores within one search). `400` for a body that isn't a readable picture, `502` when the embedder fails, `503` when image search isn't set up. Not cached.
+
+```bash
+curl -X POST https://balls.lightningbowl.de/api/balls/image-search?limit=5 \
+  -H 'Content-Type: application/json' -d "{\"image\": \"$(base64 -w0 photo.jpg)\"}"
+```
+
 ### `GET /api/brands`, `/api/cores`, `/api/coverstocks`
 
 Sorted by name (cores and coverstocks by brand, then name). Optional parameters:
@@ -176,3 +197,5 @@ The plan is for the app to send a snapshot of its own totals, which replaces tha
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Cloudflare R2 credentials for copying ball images (same as the pattern backend's). Without them images aren't copied. |
 | `R2_BUCKET_NAME` | Bucket, default `pattern-charts`. |
 | `R2_PUBLIC_DOMAIN` | Public URL of the bucket, default `https://images.lightningbowl.de`. |
+| `EMBEDDER_URL` | Base URL of the embedder service ([`embedder/`](embedder/)), for image search. Without it pictures aren't embedded and image search answers `503`. |
+| `EMBEDDER_KEY` | The embedder's `API_KEY`. |
