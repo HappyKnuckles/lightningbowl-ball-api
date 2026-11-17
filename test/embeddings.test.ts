@@ -330,3 +330,16 @@ test('decodes photos sent as base64 or data URLs', () => {
   assert.equal(decodeImage('not base64!', 100), null);
   assert.equal(decodeImage(Buffer.from('<svg/>').toString('base64'), 100), null);
 });
+
+test('takes the allowed origins from the environment as it is when a request comes in', async () => {
+  const before = process.env.ALLOWED_ORIGINS;
+  process.env.ALLOWED_ORIGINS = 'http://localhost:4200';
+  try {
+    const preflight = await call(imageSearch, {}, { method: 'OPTIONS', headers: { origin: 'http://localhost:4200' } });
+    assert.equal(preflight.statusCode, 200);
+    assert.equal(preflight.headers['access-control-allow-origin'], 'http://localhost:4200');
+  } finally {
+    if (before === undefined) delete process.env.ALLOWED_ORIGINS;
+    else process.env.ALLOWED_ORIGINS = before;
+  }
+});

@@ -60,11 +60,13 @@ function rateLimit(req: ApiRequest, res: ApiResponse): boolean {
   return true;
 }
 
-// Allowed CORS origins - configurable via ALLOWED_ORIGINS env variable (comma-separated)
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
-  .split(',')
-  .map((o) => o.trim())
-  .filter(Boolean);
+// Allowed CORS origins - configurable via ALLOWED_ORIGINS env variable (comma-separated). Read on each
+// request, not at import: the dev server loads .env.local only after importing the handlers.
+const allowedOrigins = () =>
+  (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
 
 // Fixed regex for Vercel preview deployments of the lightningbowl project
 const vercelPreviewRegex = /^https:\/\/lightningbowl-[a-z0-9]+(?:-[a-z0-9]+)*-nicos-projects-1c3811a7\.vercel\.app$/;
@@ -80,7 +82,7 @@ export function withCors(handler: Handler, { method = 'GET' }: { method?: 'GET' 
     const origin = req.headers.origin;
 
     // More strict CORS - only allow credentials for known origins or Vercel preview deployments
-    const isAllowedOrigin = !!origin && (allowedOrigins.includes(origin) || vercelPreviewRegex.test(origin));
+    const isAllowedOrigin = !!origin && (allowedOrigins().includes(origin) || vercelPreviewRegex.test(origin));
 
     if (isAllowedOrigin) {
       res.setHeader('Access-Control-Allow-Origin', origin);
