@@ -27,9 +27,9 @@ jobs:
           node-version: 22
       - name: browser
         run: |
-          npm init -y > /dev/null && npm i playwright@1.56.1 html-to-image@1.11.13 > /dev/null 2>&1 && npx playwright install --with-deps chromium > /dev/null 2>&1
+          npm init -y > /dev/null && npm i playwright@1.56.1 html-to-image@1.11.13 > /dev/null 2>&1 && npx playwright install --with-deps chromium webkit > /dev/null 2>&1
           cat > p.cjs <<'JS'
-          const { chromium } = require('playwright');
+          const { chromium, webkit } = require('playwright');
           const http = require('http'); const fs = require('fs');
           const lib = fs.readFileSync('node_modules/html-to-image/dist/html-to-image.js', 'utf8');
           const url = process.env.URL;
@@ -38,7 +38,8 @@ jobs:
             customElements.define('x-img', class extends HTMLElement { connectedCallback() { const r = this.attachShadow({mode:'open'}); r.innerHTML = '<img src="${url}" style="width:200px;height:200px">'; } });
           </script></body>`;
           http.createServer((q, s) => { s.writeHead(200, { 'content-type': 'text/html' }); s.end(html); }).listen(8123, async () => {
-            const b = await chromium.launch(); const p = await b.newPage();
+            for (const [name, type] of [['chromium', chromium], ['webkit', webkit]]) {
+            const b = await type.launch(); const p = await b.newPage();
             const logs = []; p.on('console', (m) => logs.push(m.type() + ': ' + m.text().slice(0, 200)));
             await p.goto('http://localhost:8123/'); await p.waitForTimeout(2500);
             const r = await p.evaluate(async () => {
@@ -52,13 +53,14 @@ jobs:
                 for (let i = 0; i < d.length; i += 4) if (d[i] < 240 || d[i + 1] < 240 || d[i + 2] < 240) nonWhite++;
                 return nonWhite;
               };
-              try { out.plain = await pixel({}); } catch (e) { out.plain = 'ERR ' + e; }
-              try { out.cacheBust = await pixel({ cacheBust: true }); } catch (e) { out.cacheBust = 'ERR ' + e; }
+              for (let i = 1; i <= 3; i++) { try { out['cacheBust' + i] = await pixel({ cacheBust: true }); } catch (e) { out['cacheBust' + i] = 'ERR ' + e; } }
               return out;
             });
-            console.log('::notice title=browser::' + JSON.stringify(r));
-            console.log('::notice title=console::' + logs.join(' || ').slice(0, 2500));
-            await b.close(); process.exit(0);
+            console.log('::notice title=' + name + '::' + JSON.stringify(r));
+            console.log('::notice title=' + name + ' console::' + logs.join(' || ').slice(0, 1500));
+            await b.close();
+            }
+            process.exit(0);
           });
           JS
           URL="$URL" node p.cjs
