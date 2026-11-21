@@ -10,7 +10,9 @@ jobs:
       - name: headers
         run: |
           n() { echo "::notice title=$1::$(echo "$2" | tr '\n' '|' | head -c 2500)"; }
-          J=$(curl -s 'https://balls.lightningbowl.de/api/balls?limit=3')
+          UA='Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'
+          J=$(curl -s -A "$UA" 'https://lightningbowl-ball-api.vercel.app/api/balls?limit=3')
+          echo "$J" | grep -q images.lightningbowl.de || J=$(curl -s -A "$UA" -H 'Origin: https://lightningbowl.de' 'https://balls.lightningbowl.de/api/balls?limit=3')
           n api "$(echo "$J" | head -c 600)"
           URL=$(echo "$J" | grep -oE '"thumbnail_image":"[^"]+"' | head -1 | cut -d'"' -f4)
           [ -z "$URL" ] && URL=$(echo "$J" | grep -oE 'https://images\.lightningbowl\.de/[^"]+' | head -1)
