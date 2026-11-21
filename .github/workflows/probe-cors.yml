@@ -1,0 +1,62 @@
+name: probe-cors
+on:
+  push:
+    branches: [probe-cors]
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: headers
+        run: |
+          n() { echo "::notice title=$1::$(echo "$2" | tr '\n' '|' | head -c 2500)"; }
+          J=$(curl -s 'https://balls.lightningbowl.de/api/balls?limit=3')
+          n api "$(echo "$J" | head -c 600)"
+          URL=$(echo "$J" | grep -oE '"thumbnail_image":"[^"]+"' | head -1 | cut -d'"' -f4)
+          [ -z "$URL" ] && URL=$(echo "$J" | grep -oE 'https://images\.lightningbowl\.de/[^"]+' | head -1)
+          echo "URL=$URL" >> $GITHUB_ENV
+          n url "$URL"
+          n plain "$(curl -sI "$URL" | grep -iE '^(HTTP|access-control|vary|cf-cache|cache-control|content-type)')"
+          n with-origin "$(curl -sI -H 'Origin: https://lightningbowl.de' "$URL" | grep -iE '^(HTTP|access-control|vary|cf-cache|cache-control)')"
+          n cachebust-origin "$(curl -sI -H 'Origin: https://lightningbowl.de' "$URL?$(date +%s)" | grep -iE '^(HTTP|access-control|vary|cf-cache|cache-control)')"
+          n preflight "$(curl -si -X OPTIONS -H 'Origin: https://lightningbowl.de' -H 'Access-Control-Request-Method: GET' "$URL" | grep -iE '^(HTTP|access-control)')"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: browser
+        run: |
+          npm init -y > /dev/null && npm i playwright@1.56.1 html-to-image@1.11.13 > /dev/null 2>&1 && npx playwright install --with-deps chromium > /dev/null 2>&1
+          cat > p.cjs <<'JS'
+          const { chromium } = require('playwright');
+          const http = require('http'); const fs = require('fs');
+          const lib = fs.readFileSync('node_modules/html-to-image/dist/html-to-image.js', 'utf8');
+          const url = process.env.URL;
+          const html = `<!doctype html><body style="margin:0"><div id="card" style="width:200px;height:200px;background:#fff">
+            <x-img id="x"></x-img></div><script>${lib}</script><script>
+            customElements.define('x-img', class extends HTMLElement { connectedCallback() { const r = this.attachShadow({mode:'open'}); r.innerHTML = '<img src="${url}" style="width:200px;height:200px">'; } });
+          </script></body>`;
+          http.createServer((q, s) => { s.writeHead(200, { 'content-type': 'text/html' }); s.end(html); }).listen(8123, async () => {
+            const b = await chromium.launch(); const p = await b.newPage();
+            const logs = []; p.on('console', (m) => logs.push(m.type() + ': ' + m.text().slice(0, 200)));
+            await p.goto('http://localhost:8123/'); await p.waitForTimeout(2500);
+            const r = await p.evaluate(async () => {
+              const out = {};
+              try { const res = await fetch(document.querySelector('x-img').shadowRoot.querySelector('img').src + '?probe=1'); out.fetch = res.status + ' ' + res.headers.get('access-control-allow-origin'); } catch (e) { out.fetch = 'ERR ' + e.message; }
+              const pixel = async (opts) => {
+                const data = await htmlToImage.toPng(document.getElementById('card'), opts);
+                const img = new Image(); img.src = data; await img.decode();
+                const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+                const d = g.getImageData(0, 0, c.width, c.height).data; let nonWhite = 0;
+                for (let i = 0; i < d.length; i += 4) if (d[i] < 240 || d[i + 1] < 240 || d[i + 2] < 240) nonWhite++;
+                return nonWhite;
+              };
+              try { out.plain = await pixel({}); } catch (e) { out.plain = 'ERR ' + e; }
+              try { out.cacheBust = await pixel({ cacheBust: true }); } catch (e) { out.cacheBust = 'ERR ' + e; }
+              return out;
+            });
+            console.log('::notice title=browser::' + JSON.stringify(r));
+            console.log('::notice title=console::' + logs.join(' || ').slice(0, 2500));
+            await b.close(); process.exit(0);
+          });
+          JS
+          URL="$URL" node p.cjs
