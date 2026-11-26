@@ -30,7 +30,7 @@ Local development: copy `.env.example` to `.env.local`, then `npm install`, `npm
 
 ## Ball images
 
-Ball images are copied to Cloudflare R2 (the bucket behind `images.lightningbowl.de` that also holds the pattern charts, under `balls/`), so the app doesn't load them from bowwwl.com.
+Ball images are copied to Cloudflare R2 (bucket `lightningbowl-images` behind `images.lightningbowl.de`, which also holds the pattern charts; balls under `balls/`), so the app doesn't load them from bowwwl.com.
 
 - **After the balls**, each sync copies images that have no copy yet, newest balls first, for whatever is left of the first 240 s of the run (the cron may run 300 s). `stats.images` shows `copied`, `failed`, `remaining` and `bytes`.
 - **Copies are keyed by bowwwl's image path** (`ball_images` table), so balls that share an image across weights share one copy, and an image that changes upstream (new path) is copied again. Objects are stored with `Cache-Control: public, max-age=31536000, immutable`.
@@ -174,5 +174,5 @@ The plan is for the app to send a snapshot of its own totals, which replaces tha
 | `DB_POOL_MAX` | Connections per function instance, default `3`. |
 | `BOWWWL_API_BASE` | Upstream base URL, default `https://bowwwl.com/restapi`. |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Cloudflare R2 credentials for copying ball images (same as the pattern backend's). Without them images aren't copied. |
-| `R2_BUCKET_NAME` | Bucket, default `pattern-charts`. |
+| `R2_BUCKET_NAME` | Bucket, default `lightningbowl-images`. |
 | `R2_PUBLIC_DOMAIN` | Public URL of the bucket, default `https://images.lightningbowl.de`. |

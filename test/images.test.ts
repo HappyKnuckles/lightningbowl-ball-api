@@ -182,7 +182,7 @@ test('without R2 settings the sync says so and copies nothing', async () => {
     accountId: 'a',
     accessKeyId: 'k',
     secretAccessKey: 's',
-    bucket: 'pattern-charts',
+    bucket: 'lightningbowl-images',
     publicBase: 'https://img.test',
   });
 });
