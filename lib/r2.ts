@@ -1,7 +1,7 @@
 // Uploads to Cloudflare R2 through its S3 API, signed with AWS Signature V4
 // (no SDK needed for single PUTs). Same bucket and public domain as the
 // pattern charts: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
-// R2_BUCKET_NAME (default pattern-charts), R2_PUBLIC_DOMAIN.
+// R2_BUCKET_NAME (default lightningbowl-images), R2_PUBLIC_DOMAIN.
 import { createHash, createHmac } from 'node:crypto';
 
 export interface ImageStore {
@@ -26,7 +26,7 @@ export function r2ConfigFromEnv(env: NodeJS.ProcessEnv = process.env): R2Config 
     accountId: R2_ACCOUNT_ID,
     accessKeyId: R2_ACCESS_KEY_ID,
     secretAccessKey: R2_SECRET_ACCESS_KEY,
-    bucket: env.R2_BUCKET_NAME || 'pattern-charts',
+    bucket: env.R2_BUCKET_NAME || 'lightningbowl-images',
     publicBase: (env.R2_PUBLIC_DOMAIN || 'https://images.lightningbowl.de').replace(/\/+$/, ''),
   };
 }
